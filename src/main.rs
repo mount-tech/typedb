@@ -1,3 +1,6 @@
+#![feature(vec_push_all)]
+#![feature(convert)]
+
 mod db;
 
 use db::KV;

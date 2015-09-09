@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 use std::cell::RefCell;
+use std::thread;
+use std::fs::File;
+use std::io::prelude::*;
+use std::sync::Arc;
 
 pub struct KV {
     cab: RefCell<HashMap<&'static str, &'static str>> 
@@ -16,8 +20,10 @@ impl KV {
     /// insert a key, value pair into the KV Store
     pub fn insert(&self, key:&'static str, value:&'static str) -> Result<bool, &str> {
         // insert into the HashMap
-        let mut m = self.cab.borrow_mut();
-        m.insert(key, value);
+        {
+            let mut m = self.cab.borrow_mut();
+            m.insert(key, value);
+        }
 
         // persist
         self.write_to_persist()
@@ -25,7 +31,7 @@ impl KV {
 
     /// get a value from a key
     pub fn get(&self, key:&'static str) -> Option<&'static str> {
-        let m = self.cab.borrow_mut();
+        let m = self.cab.borrow();
         match m.get(&key) {
             Some(v) => Some((*v).clone()),
             None => None
@@ -35,8 +41,10 @@ impl KV {
     /// remove a key and associated value from the KV Store
     pub fn remove(&self, key:&'static str) -> Result<bool, &str> {
         // remove from the HashMap
-        let mut m = self.cab.borrow_mut();
-        m.remove(&key);
+        {
+            let mut m = self.cab.borrow_mut();
+            m.remove(&key);
+        }
 
         // persist
         self.write_to_persist()
@@ -44,7 +52,35 @@ impl KV {
 
     /// Write the KV Store to file
     fn write_to_persist(&self) -> Result<bool, &str> {
-        //TODO
+        let m = self.cab.borrow();
+        
+        let mut byte_vec = Vec::new();
+
+        for (k, v) in m.iter() {
+            let rec = format!("{}|{},", k, v);
+            byte_vec.push_all(rec.as_bytes());
+        }
+        
+        let data = Arc::new(byte_vec);
+
+        let _ = thread::spawn(move || {
+            let byte_slice = data.clone();
+            
+            // create the file
+            let mut f = match File::create("db.cab") {
+                Ok(f) => f,
+                Err(_) => panic!("Couldn't create file"),
+            };
+
+            // write the bytes to it
+            match f.write_all(byte_slice.as_slice()) {
+                Ok(_) => (),
+                Err(_) => panic!("Coun't write to file"),
+            };
+
+            let _ = f.flush();
+        }).join();
+
         Ok(true)
     }
 }
