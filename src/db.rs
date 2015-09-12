@@ -6,19 +6,23 @@ use std::io::prelude::*;
 use std::sync::Arc;
 
 pub struct KV {
-    cab: RefCell<HashMap<&'static str, &'static str>> 
+    cab: RefCell<HashMap<String, String>> 
 }
 
 impl KV {
     /// create a new instance of the KV store
     pub fn new() -> KV {
-        KV {
+        let store = KV {
             cab: RefCell::new(HashMap::new())
-        }
+        };
+
+        let _ = store.load_from_persist();
+
+        store
     }
 
     /// insert a key, value pair into the KV Store
-    pub fn insert(&self, key:&'static str, value:&'static str) -> Result<bool, &str> {
+    pub fn insert(&self, key: String, value: String) -> Result<bool, &str> {
         // insert into the HashMap
         {
             let mut m = self.cab.borrow_mut();
@@ -30,7 +34,7 @@ impl KV {
     }
 
     /// get a value from a key
-    pub fn get(&self, key:&'static str) -> Option<&'static str> {
+    pub fn get(&self, key: String) -> Option<String> {
         let m = self.cab.borrow();
         match m.get(&key) {
             Some(v) => Some((*v).clone()),
@@ -39,7 +43,7 @@ impl KV {
     }
 
     /// remove a key and associated value from the KV Store
-    pub fn remove(&self, key:&'static str) -> Result<bool, &str> {
+    pub fn remove(&self, key: String) -> Result<bool, &str> {
         // remove from the HashMap
         {
             let mut m = self.cab.borrow_mut();
@@ -83,6 +87,29 @@ impl KV {
 
         Ok(true)
     }
+
+    /// Load from file
+    fn load_from_persist(&self) -> Result<bool, &str> {
+        let mut f = match File::open("db.cab") {
+            Ok(f) => f,
+            Err(_) => panic!("Couldn't load from persistance"),
+        };
+
+        let mut file_string = String::new();
+        let _ = f.read_to_string(&mut file_string);
+
+        let _ = file_string.split(',').map(|s| {
+            let local_s = s.to_string();
+            let l_s: Vec<&str> = local_s.split('|').collect();
+
+            let key = l_s[0].to_string();
+            let value = l_s[1].to_string();
+
+            let _ = self.insert(key, value); 
+        });
+
+        Ok(true)
+    }
 }
 
 #[test]
@@ -94,7 +121,7 @@ fn test_create() {
 fn test_insert() {
     let test_store = KV::new();
 
-    let res = test_store.insert("key", "value");
+    let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
 }
 
@@ -102,27 +129,27 @@ fn test_insert() {
 fn test_get() {
     let test_store = KV::new();
 
-    let res = test_store.insert("key", "value");
+    let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
 
-    assert_eq!(test_store.get("key"), Some("value"));
+    assert_eq!(test_store.get("key".to_string()), Some("value".to_string()));
 }
 
 #[test]
 fn test_get_none() {
     let test_store = KV::new();
 
-    assert_eq!(test_store.get("key"), None);
+    assert_eq!(test_store.get("key".to_string()), None);
 }
 
 #[test]
 fn test_remove() {
     let test_store = KV::new();
     
-    let res = test_store.insert("key", "value");
+    let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
     
-    let res = test_store.remove("key");
+    let res = test_store.remove("key".to_string());
     assert_eq!(res, Ok(true));
 }
 
@@ -130,14 +157,14 @@ fn test_remove() {
 fn test_remove_none() {
     let test_store = KV::new();
 
-    let res = test_store.remove("key");
+    let res = test_store.remove("key".to_string());
     assert_eq!(res, Ok(true));
 }
 
 #[test]
 fn test_kv_all() {
     let test_store = KV::new();
-    let _ = test_store.insert("key", "value");
-    test_store.get("key");
-    let _ = test_store.remove("key");
+    let _ = test_store.insert("key".to_string(), "value".to_string());
+    test_store.get("key".to_string());
+    let _ = test_store.remove("key".to_string());
 }
