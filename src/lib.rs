@@ -119,12 +119,12 @@ impl KV {
 
 #[test]
 fn test_create() {
-    let _ = KV::new();
+    let _ = KV::new("./db.cab");
 }
 
 #[test]
 fn test_insert() {
-    let test_store = KV::new();
+    let test_store = KV::new("./db.cab");
 
     let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
@@ -132,7 +132,7 @@ fn test_insert() {
 
 #[test]
 fn test_get() {
-    let test_store = KV::new();
+    let test_store = KV::new("./db.cab");
 
     let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
@@ -142,14 +142,14 @@ fn test_get() {
 
 #[test]
 fn test_get_none() {
-    let test_store = KV::new();
+    let test_store = KV::new("./db.cab");
 
     assert_eq!(test_store.get("key".to_string()), None);
 }
 
 #[test]
 fn test_remove() {
-    let test_store = KV::new();
+    let test_store = KV::new("./db.cab");
     
     let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
@@ -160,7 +160,7 @@ fn test_remove() {
 
 #[test]
 fn test_remove_none() {
-    let test_store = KV::new();
+    let test_store = KV::new("./db.cab");
 
     let res = test_store.remove("key".to_string());
     assert_eq!(res, Ok(true));
@@ -168,7 +168,7 @@ fn test_remove_none() {
 
 #[test]
 fn test_kv_all() {
-    let test_store = KV::new();
+    let test_store = KV::new("./db.cab");
     let _ = test_store.insert("key".to_string(), "value".to_string());
     test_store.get("key".to_string());
     let _ = test_store.remove("key".to_string());
