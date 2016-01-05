@@ -1,3 +1,5 @@
+#![feature(convert)]
+
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::thread;
@@ -6,14 +8,16 @@ use std::io::prelude::*;
 use std::sync::Arc;
 
 pub struct KV {
-    cab: RefCell<HashMap<String, String>> 
+    cab: RefCell<HashMap<String, String>>,
+    path:&'static str,
 }
 
 impl KV {
     /// create a new instance of the KV store
-    pub fn new() -> KV {
+    pub fn new(p:&'static str) -> KV {
         let store = KV {
-            cab: RefCell::new(HashMap::new())
+            cab: RefCell::new(HashMap::new()),
+            path: p,
         };
 
         let _ = store.load_from_persist();
@@ -57,12 +61,13 @@ impl KV {
     /// Write the KV Store to file
     fn write_to_persist(&self) -> Result<bool, &str> {
         let m = self.cab.borrow();
+        let path = self.path.clone();
         
         let mut byte_vec = Vec::new();
 
         for (k, v) in m.iter() {
             let rec = format!("{}|{},", k, v);
-            byte_vec.push_all(rec.as_bytes());
+            byte_vec.extend_from_slice(rec.as_bytes());
         }
         
         let data = Arc::new(byte_vec);
@@ -71,7 +76,7 @@ impl KV {
             let byte_slice = data.clone();
             
             // create the file
-            let mut f = match File::create("db.cab") {
+            let mut f = match File::create(path) {
                 Ok(f) => f,
                 Err(_) => panic!("Couldn't create file"),
             };
@@ -90,9 +95,9 @@ impl KV {
 
     /// Load from file
     fn load_from_persist(&self) -> Result<bool, &str> {
-        let mut f = match File::open("db.cab") {
+        let mut f = match File::open(self.path) {
             Ok(f) => f,
-            Err(_) => panic!("Couldn't load from persistance"),
+            Err(_) => return Err("Couldn't load from persistance"),
         };
 
         let mut file_string = String::new();
