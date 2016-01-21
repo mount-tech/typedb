@@ -20,7 +20,10 @@ impl KV {
             path: p,
         };
 
-        let _ = store.load_from_persist();
+        let _ =match store.load_from_persist() {
+            Ok(f) => f,
+            Err(e) => panic!("{}", e)
+        };
 
         store
     }
@@ -84,7 +87,7 @@ impl KV {
             // write the bytes to it
             match f.write_all(byte_slice.as_slice()) {
                 Ok(_) => (),
-                Err(_) => panic!("Coun't write to file"),
+                Err(_) => panic!("Couldn't write to file"),
             };
 
             let _ = f.flush();
