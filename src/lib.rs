@@ -20,7 +20,7 @@ impl KV {
             path: p,
         };
 
-        let _ =match store.load_from_persist() {
+        let _ = match store.load_from_persist() {
             Ok(f) => f,
             Err(e) => panic!("{}", e)
         };
@@ -106,7 +106,11 @@ impl KV {
         let mut file_string = String::new();
         let _ = f.read_to_string(&mut file_string);
 
-        let _ = file_string.split(',').map(|s| {
+        for s in file_string.split(',') {
+            if s == "" {
+                continue; 
+            }
+
             let local_s = s.to_string();
             let l_s: Vec<&str> = local_s.split('|').collect();
 
@@ -114,7 +118,7 @@ impl KV {
             let value = l_s[1].to_string();
 
             let _ = self.insert(key, value); 
-        });
+        }
 
         Ok(true)
     }
@@ -175,4 +179,17 @@ fn test_kv_all() {
     let _ = test_store.insert("key".to_string(), "value".to_string());
     test_store.get("key".to_string());
     let _ = test_store.remove("key".to_string());
+}
+
+#[test]
+fn test_multi_instance() {
+    {
+        let test_store = KV::new("./db.cab");
+        let _ = test_store.insert("key".to_string(), "value".to_string());
+    }
+    {
+        let test_store = KV::new("./db.cab");
+        assert!(test_store.get("key".to_string()) == Some("value".to_string()));
+        let _ = test_store.remove("key".to_string());
+    }
 }
