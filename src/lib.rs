@@ -61,6 +61,15 @@ impl KV {
         self.write_to_persist()
     }
 
+    /// get all the keys contained in the KV Store
+    pub fn keys(&self) -> Vec<String> {
+        let m = self.cab.borrow();
+        
+        let keys = m.keys().map(|k| k.clone()).collect();
+
+        keys
+    }
+
     /// Write the KV Store to file
     fn write_to_persist(&self) -> Result<bool, &str> {
         let m = self.cab.borrow();
@@ -151,7 +160,7 @@ fn test_get() {
 fn test_get_none() {
     let test_store = KV::new("./db.cab");
 
-    assert_eq!(test_store.get("key".to_string()), None);
+    assert_eq!(test_store.get("none".to_string()), None);
 }
 
 #[test]
@@ -171,6 +180,20 @@ fn test_remove_none() {
 
     let res = test_store.remove("key".to_string());
     assert_eq!(res, Ok(true));
+}
+
+#[test]
+fn test_keys() {
+    let test_store = KV::new("./db.cab");
+
+    let _ = test_store.insert("key".to_string(), "value".to_string());
+    let _ = test_store.insert("key2".to_string(), "value2".to_string());
+
+    assert!(test_store.keys().len() == 2);
+    let _ = test_store.remove("key".to_string());
+    assert!(test_store.keys().len() == 1);
+    let _ = test_store.remove("key2".to_string());
+    assert!(test_store.keys().len() == 0);
 }
 
 #[test]
