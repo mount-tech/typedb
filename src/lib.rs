@@ -89,8 +89,6 @@ impl KV {
             },
         };
 
-        println!("{:?}\n", byte_vec);
-        
         let _ = thread::spawn(move || {
             // create the file
             let mut f = match File::create(path) {
@@ -119,8 +117,6 @@ impl KV {
 
         let mut byte_vec = Vec::new();
         let _ = f.read_to_end(&mut byte_vec);
-
-        println!("{:?}\n", byte_vec);
 
         let decoded: HashMap<String, String> = match decode(byte_vec.as_slice()) {
             Ok(f) => f,
@@ -240,7 +236,6 @@ fn test_multi_instance() {
     }
     {
         let test_store = KV::new(test_cab_path);
-        println!("{:?}", test_store.get("key".to_string()));
         assert!(test_store.get("key".to_string()) == Some("value".to_string()));
         let _ = test_store.remove("key".to_string());
     }
