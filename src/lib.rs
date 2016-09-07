@@ -137,56 +137,75 @@ impl KV {
 
 #[test]
 fn test_create() {
-    let _ = KV::new("./test_create.cab");
+    let test_cab_path ="./test_create.cab";
+    let _ = KV::new(test_cab_path);
+   
+    let _ = std::fs::remove_file(test_cab_path);
 }
 
 #[test]
 fn test_insert() {
-    let test_store = KV::new("./test_insert.cab");
+    let test_cab_path = "./test_insert.cab";
+    let test_store = KV::new(test_cab_path);
 
     let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
+    
+    let _ = std::fs::remove_file(test_cab_path);
 }
 
 #[test]
 fn test_get() {
-    let test_store = KV::new("./test_get.cab");
+    let test_cab_path = "./test_get.cab";
+    let test_store = KV::new(test_cab_path);
 
     let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
 
     assert_eq!(test_store.get("key".to_string()), Some("value".to_string()));
+    
+    let _ = std::fs::remove_file(test_cab_path);
 }
 
 #[test]
 fn test_get_none() {
-    let test_store = KV::new("./test_get_none.cab");
+    let test_cab_path = "./test_get_none.cab";
+    let test_store = KV::new(test_cab_path);
 
     assert_eq!(test_store.get("none".to_string()), None);
+
+    let _ = std::fs::remove_file(test_cab_path);
 }
 
 #[test]
 fn test_remove() {
-    let test_store = KV::new("./test_remove.cab");
+    let test_cab_path = "./test_remove.cab";
+    let test_store = KV::new(test_cab_path);
     
     let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
     
     let res = test_store.remove("key".to_string());
     assert_eq!(res, Ok(true));
+    
+    let _ = std::fs::remove_file(test_cab_path);
 }
 
 #[test]
 fn test_remove_none() {
-    let test_store = KV::new("./test_remove_none.cab");
+    let test_cab_path = "./test_remove_none.cab";
+    let test_store = KV::new(test_cab_path);
 
     let res = test_store.remove("key".to_string());
     assert_eq!(res, Ok(true));
+    
+    let _ = std::fs::remove_file(test_cab_path);
 }
 
 #[test]
 fn test_keys() {
-    let test_store = KV::new("./test_keys.cab");
+    let test_cab_path = "./test_keys.cab";
+    let test_store = KV::new(test_cab_path);
 
     let _ = test_store.insert("key".to_string(), "value".to_string());
     let _ = test_store.insert("key2".to_string(), "value2".to_string());
@@ -196,26 +215,34 @@ fn test_keys() {
     assert!(test_store.keys().len() == 1);
     let _ = test_store.remove("key2".to_string());
     assert!(test_store.keys().len() == 0);
+    
+    let _ = std::fs::remove_file(test_cab_path);
 }
 
 #[test]
 fn test_kv_all() {
-    let test_store = KV::new("./test_kv_all.cab");
+    let test_cab_path = "./test_kv_all.cab";
+    let test_store = KV::new(test_cab_path);
+
     let _ = test_store.insert("key".to_string(), "value".to_string());
     test_store.get("key".to_string());
     let _ = test_store.remove("key".to_string());
+
+    let _ = std::fs::remove_file(test_cab_path);
 }
 
 #[test]
 fn test_multi_instance() {
+    let test_cab_path = "./test_multi_instance.cab";
     {
-        let test_store = KV::new("./test_multi_instance.cab");
+        let test_store = KV::new(test_cab_path);
         let _ = test_store.insert("key".to_string(), "value".to_string());
     }
     {
-        let test_store = KV::new("./test_multi_instance.cab");
+        let test_store = KV::new(test_cab_path);
         println!("{:?}", test_store.get("key".to_string()));
         assert!(test_store.get("key".to_string()) == Some("value".to_string()));
         let _ = test_store.remove("key".to_string());
     }
+    let _ = std::fs::remove_file(test_cab_path);
 }
