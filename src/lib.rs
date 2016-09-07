@@ -1,11 +1,14 @@
-#![feature(convert)]
+extern crate bincode;
+extern crate rustc_serialize;
 
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::thread;
 use std::fs::File;
 use std::io::prelude::*;
-use std::sync::Arc;
+
+use bincode::SizeLimit;
+use bincode::rustc_serialize::{encode, decode};
 
 pub struct KV {
     cab: RefCell<HashMap<String, String>>,
@@ -22,7 +25,10 @@ impl KV {
 
         let _ = match store.load_from_persist() {
             Ok(f) => f,
-            Err(e) => panic!("{}", e)
+            Err(e) => {
+                println!("{}", e);
+                File::create(p).is_ok()
+            },
         };
 
         store
@@ -72,21 +78,20 @@ impl KV {
 
     /// Write the KV Store to file
     fn write_to_persist(&self) -> Result<bool, &str> {
-        let m = self.cab.borrow();
+        let m = self.cab.borrow_mut();
         let path = self.path.clone();
         
-        let mut byte_vec = Vec::new();
+        let byte_vec: Vec<u8> = match encode(&*m, SizeLimit::Infinite) {
+            Ok(bv) => bv,
+            Err(e) => {
+                print!("{}", e);
+                return Err("Error: Could not write to persist");
+            },
+        };
 
-        for (k, v) in m.iter() {
-            let rec = format!("{}|{},", k, v);
-            byte_vec.extend_from_slice(rec.as_bytes());
-        }
+        println!("{:?}\n", byte_vec);
         
-        let data = Arc::new(byte_vec);
-
         let _ = thread::spawn(move || {
-            let byte_slice = data.clone();
-            
             // create the file
             let mut f = match File::create(path) {
                 Ok(f) => f,
@@ -94,7 +99,7 @@ impl KV {
             };
 
             // write the bytes to it
-            match f.write_all(byte_slice.as_slice()) {
+            match f.write_all(byte_vec.as_slice()) {
                 Ok(_) => (),
                 Err(_) => panic!("Couldn't write to file"),
             };
@@ -109,25 +114,22 @@ impl KV {
     fn load_from_persist(&self) -> Result<bool, &str> {
         let mut f = match File::open(self.path) {
             Ok(f) => f,
-            Err(_) => return Err("Couldn't load from persistance"),
+            Err(_) => return Err("Couldn't open cab"),
         };
 
-        let mut file_string = String::new();
-        let _ = f.read_to_string(&mut file_string);
+        let mut byte_vec = Vec::new();
+        let _ = f.read_to_end(&mut byte_vec);
 
-        for s in file_string.split(',') {
-            if s == "" {
-                continue; 
-            }
+        println!("{:?}\n", byte_vec);
 
-            let local_s = s.to_string();
-            let l_s: Vec<&str> = local_s.split('|').collect();
-
-            let key = l_s[0].to_string();
-            let value = l_s[1].to_string();
-
-            let _ = self.insert(key, value); 
-        }
+        let decoded: HashMap<String, String> = match decode(byte_vec.as_slice()) {
+            Ok(f) => f,
+            Err(e) => {
+                println!("{}", e);
+                return Err("Couldn't decode cab");
+            },
+        }; 
+        *self.cab.borrow_mut() = decoded;
 
         Ok(true)
     }
@@ -135,12 +137,12 @@ impl KV {
 
 #[test]
 fn test_create() {
-    let _ = KV::new("./db.cab");
+    let _ = KV::new("./test_create.cab");
 }
 
 #[test]
 fn test_insert() {
-    let test_store = KV::new("./db.cab");
+    let test_store = KV::new("./test_insert.cab");
 
     let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
@@ -148,7 +150,7 @@ fn test_insert() {
 
 #[test]
 fn test_get() {
-    let test_store = KV::new("./db.cab");
+    let test_store = KV::new("./test_get.cab");
 
     let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
@@ -158,14 +160,14 @@ fn test_get() {
 
 #[test]
 fn test_get_none() {
-    let test_store = KV::new("./db.cab");
+    let test_store = KV::new("./test_get_none.cab");
 
     assert_eq!(test_store.get("none".to_string()), None);
 }
 
 #[test]
 fn test_remove() {
-    let test_store = KV::new("./db.cab");
+    let test_store = KV::new("./test_remove.cab");
     
     let res = test_store.insert("key".to_string(), "value".to_string());
     assert_eq!(res, Ok(true));
@@ -176,7 +178,7 @@ fn test_remove() {
 
 #[test]
 fn test_remove_none() {
-    let test_store = KV::new("./db.cab");
+    let test_store = KV::new("./test_remove_none.cab");
 
     let res = test_store.remove("key".to_string());
     assert_eq!(res, Ok(true));
@@ -184,7 +186,7 @@ fn test_remove_none() {
 
 #[test]
 fn test_keys() {
-    let test_store = KV::new("./db.cab");
+    let test_store = KV::new("./test_keys.cab");
 
     let _ = test_store.insert("key".to_string(), "value".to_string());
     let _ = test_store.insert("key2".to_string(), "value2".to_string());
@@ -198,7 +200,7 @@ fn test_keys() {
 
 #[test]
 fn test_kv_all() {
-    let test_store = KV::new("./db.cab");
+    let test_store = KV::new("./test_kv_all.cab");
     let _ = test_store.insert("key".to_string(), "value".to_string());
     test_store.get("key".to_string());
     let _ = test_store.remove("key".to_string());
@@ -207,11 +209,12 @@ fn test_kv_all() {
 #[test]
 fn test_multi_instance() {
     {
-        let test_store = KV::new("./db.cab");
+        let test_store = KV::new("./test_multi_instance.cab");
         let _ = test_store.insert("key".to_string(), "value".to_string());
     }
     {
-        let test_store = KV::new("./db.cab");
+        let test_store = KV::new("./test_multi_instance.cab");
+        println!("{:?}", test_store.get("key".to_string()));
         assert!(test_store.get("key".to_string()) == Some("value".to_string()));
         let _ = test_store.remove("key".to_string());
     }

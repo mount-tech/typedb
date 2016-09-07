@@ -1,3 +1,5 @@
 target
 *.swp
 **/.DS_Store
+*.cab
+Cargo.lock
