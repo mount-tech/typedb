@@ -5,7 +5,7 @@ Simple persistent HashMap
 
 ```rust
 let cab = KV::new("./db.cab");
-let _ = cab.insert("key".to_string(), "value".to_string());
+let _ = cab.insert("key".to_string(), Value::String("value".to_string()));
 cab.get("key".to_string());
 let _ = cab.remove("key".to_string())
 ```
@@ -23,7 +23,7 @@ let _ = cab.remove("key".to_string())
 
 ####The MIT License####
 
-Copyright (C) 2014 Samuel W. Hockham
+Copyright (C) 2017 Samuel W. Hockham
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
