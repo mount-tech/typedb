@@ -2,7 +2,6 @@ extern crate bincode;
 extern crate rustc_serialize;
 
 use std::collections::HashMap;
-use std::cell::RefCell;
 use std::thread;
 use std::fs::File;
 use std::io::prelude::*;
@@ -15,18 +14,19 @@ pub enum Value {
     String(String),
     Int(i32),
     Float(f32),
+    Map(HashMap<String, Value>),
 }
 
 pub struct KV {
-    cab: RefCell<HashMap<String, Value>>,
+    cab: HashMap<String, Value>,
     path:&'static str,
 }
 
 impl KV {
     /// create a new instance of the KV store
     pub fn new(p:&'static str) -> KV {
-        let store = KV {
-            cab: RefCell::new(HashMap::new()),
+        let mut store = KV {
+            cab: HashMap::new(),
             path: p,
         };
 
@@ -42,53 +42,39 @@ impl KV {
     }
 
     /// insert a key, value pair into the KV Store
-    pub fn insert(&self, key: String, value: Value) -> Result<bool, &str> {
+    pub fn insert(&mut self, key: String, value: Value) -> Result<bool, &str> {
         // insert into the HashMap
-        {
-            let mut m = self.cab.borrow_mut();
-            m.insert(key, value);
-        }
-
+        self.cab.insert(key, value);
         // persist
         self.write_to_persist()
     }
 
     /// get a value from a key
-    pub fn get(&self, key: String) -> Option<Value> {
-        let m = self.cab.borrow();
-        match m.get(&key) {
+    pub fn get(&mut self, key: String) -> Option<Value> {
+        match self.cab.get(&key) {
             Some(v) => Some((*v).clone()),
             None => None
         }
     }
 
     /// remove a key and associated value from the KV Store
-    pub fn remove(&self, key: String) -> Result<bool, &str> {
+    pub fn remove(&mut self, key: String) -> Result<bool, &str> {
         // remove from the HashMap
-        {
-            let mut m = self.cab.borrow_mut();
-            m.remove(&key);
-        }
-
+        self.cab.remove(&key);
         // persist
         self.write_to_persist()
     }
 
     /// get all the keys contained in the KV Store
-    pub fn keys(&self) -> Vec<String> {
-        let m = self.cab.borrow();
-        
-        let keys = m.keys().map(|k| k.clone()).collect();
-
-        keys
+    pub fn keys(&mut self) -> Vec<String> {
+        self.cab.keys().map(|k| k.clone()).collect()
     }
 
     /// Write the KV Store to file
-    fn write_to_persist(&self) -> Result<bool, &str> {
-        let m = self.cab.borrow_mut();
+    fn write_to_persist(&mut self) -> Result<bool, &str> {
         let path = self.path.clone();
         
-        let byte_vec: Vec<u8> = match encode(&*m, SizeLimit::Infinite) {
+        let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
             Ok(bv) => bv,
             Err(e) => {
                 print!("{}", e);
@@ -102,7 +88,6 @@ impl KV {
                 Ok(f) => f,
                 Err(_) => panic!("Couldn't create file"),
             };
-
             // write the bytes to it
             match f.write_all(byte_vec.as_slice()) {
                 Ok(_) => (),
@@ -116,7 +101,7 @@ impl KV {
     }
 
     /// Load from file
-    fn load_from_persist(&self) -> Result<bool, &str> {
+    fn load_from_persist(&mut self) -> Result<bool, &str> {
         let mut f = match File::open(self.path) {
             Ok(f) => f,
             Err(_) => return Err("Couldn't open cab"),
@@ -132,7 +117,7 @@ impl KV {
                 return Err("Couldn't decode cab");
             },
         }; 
-        *self.cab.borrow_mut() = decoded;
+        self.cab = decoded;
 
         Ok(true)
     }
@@ -149,7 +134,7 @@ fn test_create() {
 #[test]
 fn test_insert_string() {
     let test_cab_path = "./test_insert.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
 
     let res = test_store.insert("key".to_string(), Value::String("value".to_string()));
     assert_eq!(res, Ok(true));
@@ -160,7 +145,7 @@ fn test_insert_string() {
 #[test]
 fn test_insert_int() {
     let test_cab_path = "./test_insert.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
 
     let res = test_store.insert("key".to_string(), Value::Int(0i32));
     assert_eq!(res, Ok(true));
@@ -171,7 +156,7 @@ fn test_insert_int() {
 #[test]
 fn test_insert_float() {
     let test_cab_path = "./test_insert.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
 
     let res = test_store.insert("key".to_string(), Value::Float(0f32));
     assert_eq!(res, Ok(true));
@@ -182,12 +167,16 @@ fn test_insert_float() {
 #[test]
 fn test_get_string() {
     let test_cab_path = "./test_get.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
 
-    let res = test_store.insert("key".to_string(), Value::String("value".to_string()));
-    assert_eq!(res, Ok(true));
+    {
+        let res = test_store.insert("key".to_string(), Value::String("value".to_string()));
+        assert_eq!(res, Ok(true));
+    }
 
-    assert_eq!(test_store.get("key".to_string()), Some(Value::String("value".to_string())));
+    {
+        assert_eq!(test_store.get("key".to_string()), Some(Value::String("value".to_string())));
+    }
     
     let _ = std::fs::remove_file(test_cab_path);
 }
@@ -195,12 +184,16 @@ fn test_get_string() {
 #[test]
 fn test_get_int() {
     let test_cab_path = "./test_get.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
 
-    let res = test_store.insert("key".to_string(), Value::Int(0i32));
-    assert_eq!(res, Ok(true));
+    {
+        let res = test_store.insert("key".to_string(), Value::Int(0i32));
+        assert_eq!(res, Ok(true));
+    }
 
-    assert_eq!(test_store.get("key".to_string()), Some(Value::Int(0i32)));
+    {
+        assert_eq!(test_store.get("key".to_string()), Some(Value::Int(0i32)));
+    }
     
     let _ = std::fs::remove_file(test_cab_path);
 }
@@ -208,12 +201,16 @@ fn test_get_int() {
 #[test]
 fn test_get_float() {
     let test_cab_path = "./test_get.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
 
-    let res = test_store.insert("key".to_string(), Value::Float(0f32));
-    assert_eq!(res, Ok(true));
+    {
+        let res = test_store.insert("key".to_string(), Value::Float(0f32));
+        assert_eq!(res, Ok(true));
+    }
 
-    assert_eq!(test_store.get("key".to_string()), Some(Value::Float(0f32)));
+    {
+        assert_eq!(test_store.get("key".to_string()), Some(Value::Float(0f32)));
+    }
     
     let _ = std::fs::remove_file(test_cab_path);
 }
@@ -221,7 +218,7 @@ fn test_get_float() {
 #[test]
 fn test_get_none() {
     let test_cab_path = "./test_get_none.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
 
     assert_eq!(test_store.get("none".to_string()), None);
 
@@ -231,13 +228,17 @@ fn test_get_none() {
 #[test]
 fn test_remove() {
     let test_cab_path = "./test_remove.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
     
-    let res = test_store.insert("key".to_string(), Value::String("value".to_string()));
-    assert_eq!(res, Ok(true));
+    {
+        let res = test_store.insert("key".to_string(), Value::String("value".to_string()));
+        assert_eq!(res, Ok(true));
+    }
     
-    let res = test_store.remove("key".to_string());
-    assert_eq!(res, Ok(true));
+    {
+        let res = test_store.remove("key".to_string());
+        assert_eq!(res, Ok(true));
+    }
     
     let _ = std::fs::remove_file(test_cab_path);
 }
@@ -245,7 +246,7 @@ fn test_remove() {
 #[test]
 fn test_remove_none() {
     let test_cab_path = "./test_remove_none.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
 
     let res = test_store.remove("key".to_string());
     assert_eq!(res, Ok(true));
@@ -256,7 +257,7 @@ fn test_remove_none() {
 #[test]
 fn test_keys() {
     let test_cab_path = "./test_keys.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
 
     let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
     let _ = test_store.insert("key2".to_string(), Value::String("value2".to_string()));
@@ -273,7 +274,7 @@ fn test_keys() {
 #[test]
 fn test_kv_all() {
     let test_cab_path = "./test_kv_all.cab";
-    let test_store = KV::new(test_cab_path);
+    let mut test_store = KV::new(test_cab_path);
 
     let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
     test_store.get("key".to_string());
@@ -286,11 +287,11 @@ fn test_kv_all() {
 fn test_multi_instance() {
     let test_cab_path = "./test_multi_instance.cab";
     {
-        let test_store = KV::new(test_cab_path);
+        let mut test_store = KV::new(test_cab_path);
         let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
     }
     {
-        let test_store = KV::new(test_cab_path);
+        let mut test_store = KV::new(test_cab_path);
         assert!(test_store.get("key".to_string()) == Some(Value::String("value".to_string())));
         let _ = test_store.remove("key".to_string());
     }
