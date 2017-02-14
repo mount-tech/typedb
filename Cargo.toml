@@ -1,9 +1,9 @@
 [package]
 name = "kv_cab"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["shockham <samuel.hockham@gmail.com>"]
 
 [dependencies]
-bincode = "*"
-rustc-serialize = "*"
+bincode = "0.6"
+rustc-serialize = "0.3"
 
