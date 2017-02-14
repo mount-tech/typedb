@@ -2,6 +2,11 @@
 name = "kv_cab"
 version = "0.2.0"
 authors = ["shockham <samuel.hockham@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/shockham/kv_cab"
+homepage = "https://github.com/shockham/kv_cab"
+description = "Simple Persistent HashMap"
 
 [dependencies]
 bincode = "0.6"
