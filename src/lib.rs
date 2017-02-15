@@ -103,9 +103,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         if !self.wait_for_free().is_ok() {
             return Err("File doesn't exist or is not readeable"); 
         }
-
-        let path = self.path.clone();
-        KV::<V>::lock_cab(path, false);
+        KV::<V>::lock_cab(self.path, false);
 
         // encode the cab as a u8 vec
         let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
@@ -116,6 +114,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
             },
         };
 
+        let path = self.path.clone();
         let _ = thread::spawn(move || {
             // create the file
             let mut f = File::create(path).unwrap();
