@@ -8,6 +8,7 @@ extern crate log;
 
 use std::collections::HashMap;
 use std::thread;
+use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -39,8 +40,13 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
 
         match store.load_from_persist() {
             Ok(f) => trace!("{}", f),
-            Err(e) => warn!("{}", e),
+            Err(e) => {
+                warn!("{}", e);
+                let _ = File::create(p);
+            },
         };
+
+        KV::<V>::lock_cab(p, true);
 
         store
     }
@@ -84,9 +90,22 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         self.cab.keys().map(|k| k.clone()).collect()
     }
 
+    /// Locks/unlocks cab for writing purposes
+    fn lock_cab(path:&'static str, lock:bool) {
+        // set not readonly while writing
+        let mut perms = fs::metadata(path).unwrap().permissions();
+        perms.set_readonly(lock);
+        fs::set_permissions(path, perms).unwrap();
+    }
+
     /// Write the KV Store to file
     fn write_to_persist(&mut self) -> Result<bool, &str> {
+        if !self.wait_for_free().is_ok() {
+            return Err("File doesn't exist or is not readeable"); 
+        }
+
         let path = self.path.clone();
+        KV::<V>::lock_cab(path, false);
 
         // encode the cab as a u8 vec
         let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
@@ -97,29 +116,44 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
             },
         };
 
-        let write_thread = thread::spawn(move || {
+        let _ = thread::spawn(move || {
             // create the file
             let mut f = File::create(path).unwrap();
             // write the bytes to it
             f.write_all(byte_vec.as_slice()).unwrap();
             let _ = f.flush();
+
+            KV::<V>::lock_cab(path, true);
         });
 
-        // currently wait for thread to finish writing the file
-        let _ = write_thread.join();
+        Ok(true)
+    }
+
+    /// Wait for the cab to become free
+    fn wait_for_free(&self) -> Result<bool, &str> {
+        loop {
+            // check if the cab is being written to
+            let metadata = match fs::metadata(self.path) {
+                Ok(m) => m, 
+                Err(_) => return Err("File doesn't exist or is not readeable"),
+            };
+
+            if metadata.permissions().readonly() {
+                break;
+            }
+        }
 
         Ok(true)
     }
 
     /// Load from file
     fn load_from_persist(&mut self) -> Result<bool, &str> {
-        let mut f = match File::open(self.path) {
-            Ok(f) => f,
-            Err(e) => {
-                warn!("{}", e);
-                return Err("Couldn't open cab");
-            },
-        };
+        if !self.wait_for_free().is_ok() {
+            return Err("File doesn't exist or is not readeable"); 
+        }
+
+        // open the cab
+        let mut f = File::open(self.path).unwrap();
 
         let mut byte_vec = Vec::new();
         let _ = f.read_to_end(&mut byte_vec);
