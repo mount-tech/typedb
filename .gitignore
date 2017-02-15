@@ -1,4 +1,5 @@
 target
+test_cabs
 *.swp
 **/.DS_Store
 *.cab

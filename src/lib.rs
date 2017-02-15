@@ -26,7 +26,7 @@ pub enum Value {
 
 pub struct KV<V> {
     cab: HashMap<String, V>,
-    path:&'static str,
+    path: &'static str,
 }
 
 impl<V: Clone + Encodable + Decodable> KV<V> {
@@ -37,12 +37,9 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
             path: p,
         };
 
-        let _ = match store.load_from_persist() {
-            Ok(f) => f,
-            Err(e) => {
-                warn!("{}", e);
-                File::create(p).is_ok()
-            },
+        match store.load_from_persist() {
+            Ok(f) => trace!("{}", f),
+            Err(e) => warn!("{}", e),
         };
 
         store
@@ -50,6 +47,8 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
 
     /// insert a key, value pair into the KV Store
     pub fn insert(&mut self, key: String, value: V) -> Result<bool, &str> {
+        // make sure mem version up to date
+        let _ = self.load_from_persist();
         // insert into the HashMap
         self.cab.insert(key, value);
         // persist
@@ -58,6 +57,9 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
 
     /// get a value from a key
     pub fn get(&mut self, key: String) -> Option<V> {
+        // make sure mem version up to date
+        let _ = self.load_from_persist();
+        // get the value from the cab
         match self.cab.get(&key) {
             Some(v) => Some((*v).clone()),
             None => None
@@ -66,6 +68,8 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
 
     /// remove a key and associated value from the KV Store
     pub fn remove(&mut self, key: String) -> Result<bool, &str> {
+        // make sure mem version up to date
+        let _ = self.load_from_persist();
         // remove from the HashMap
         self.cab.remove(&key);
         // persist
@@ -74,6 +78,9 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
 
     /// get all the keys contained in the KV Store
     pub fn keys(&mut self) -> Vec<String> {
+        // make sure mem version up to date
+        let _ = self.load_from_persist();
+        // create a vec from the cabs keys
         self.cab.keys().map(|k| k.clone()).collect()
     }
 
@@ -81,28 +88,25 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     fn write_to_persist(&mut self) -> Result<bool, &str> {
         let path = self.path.clone();
 
+        // encode the cab as a u8 vec
         let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
             Ok(bv) => bv,
             Err(e) => {
                 warn!("{}", e);
-                return Err("Error: Could not write to persist");
+                return Err("Could not encode cab");
             },
         };
 
-        let _ = thread::spawn(move || {
+        let write_thread = thread::spawn(move || {
             // create the file
-            let mut f = match File::create(path) {
-                Ok(f) => f,
-                Err(_) => panic!("Couldn't create file"),
-            };
+            let mut f = File::create(path).unwrap();
             // write the bytes to it
-            match f.write_all(byte_vec.as_slice()) {
-                Ok(_) => (),
-                Err(_) => panic!("Couldn't write to file"),
-            };
-
+            f.write_all(byte_vec.as_slice()).unwrap();
             let _ = f.flush();
-        }).join();
+        });
+
+        // currently wait for thread to finish writing the file
+        let _ = write_thread.join();
 
         Ok(true)
     }
@@ -111,12 +115,16 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     fn load_from_persist(&mut self) -> Result<bool, &str> {
         let mut f = match File::open(self.path) {
             Ok(f) => f,
-            Err(_) => return Err("Couldn't open cab"),
+            Err(e) => {
+                warn!("{}", e);
+                return Err("Couldn't open cab");
+            },
         };
 
         let mut byte_vec = Vec::new();
         let _ = f.read_to_end(&mut byte_vec);
 
+        // decode u8 vec back into HashMap
         let decoded: HashMap<String, V> = match decode(byte_vec.as_slice()) {
             Ok(f) => f,
             Err(e) => {
@@ -134,6 +142,15 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
 mod benches {
     use super::*;
     use test::Bencher;
+
+    macro_rules! bench_teardown {
+        ( $p:ident ) => {
+            use std::{thread, time}; 
+
+            thread::sleep(time::Duration::from_secs(2)); 
+            let _ = std::fs::remove_file($p);
+        }
+    }
     
     #[bench]
     fn bench_get_int(b: &mut Bencher) {
@@ -146,7 +163,7 @@ mod benches {
             test_store.get("test".to_string());
         });
 
-        let _ = std::fs::remove_file(test_cab_path);
+        bench_teardown!(test_cab_path);
     }
 
     #[bench]
@@ -158,6 +175,6 @@ mod benches {
             let _ = test_store.insert("test".to_string(), Value::Int(1));
         });
 
-        let _ = std::fs::remove_file(test_cab_path);
+        bench_teardown!(test_cab_path);
     }
 }

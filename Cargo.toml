@@ -1,11 +1,12 @@
 [package]
 name = "kv_cab"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["shockham <samuel.hockham@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/shockham/kv_cab"
 homepage = "https://github.com/shockham/kv_cab"
+documentation = "https://docs.rs/kv_cab/*/kv_cab/"
 description = "Simple Persistent HashMap"
 
 [dependencies]
