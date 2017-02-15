@@ -11,4 +11,3 @@ description = "Simple Persistent HashMap"
 [dependencies]
 bincode = "0.6"
 rustc-serialize = "0.3"
-
