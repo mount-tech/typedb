@@ -3,6 +3,8 @@ extern crate test;
 
 extern crate bincode;
 extern crate rustc_serialize;
+#[macro_use]
+extern crate log;
 
 use std::collections::HashMap;
 use std::thread;
@@ -38,7 +40,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         let _ = match store.load_from_persist() {
             Ok(f) => f,
             Err(e) => {
-                println!("{}", e);
+                warn!("{}", e);
                 File::create(p).is_ok()
             },
         };
@@ -82,7 +84,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
             Ok(bv) => bv,
             Err(e) => {
-                print!("{}", e);
+                warn!("{}", e);
                 return Err("Error: Could not write to persist");
             },
         };
@@ -118,7 +120,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         let decoded: HashMap<String, V> = match decode(byte_vec.as_slice()) {
             Ok(f) => f,
             Err(e) => {
-                println!("{}", e);
+                warn!("{}", e);
                 return Err("Couldn't decode cab");
             },
         }; 
