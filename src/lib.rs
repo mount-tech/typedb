@@ -13,10 +13,11 @@ use std::fs::File;
 use std::io::prelude::*;
 
 use bincode::SizeLimit;
-use bincode::rustc_serialize::{encode, decode};
+use bincode::rustc_serialize::{ encode, decode };
 
 use rustc_serialize::{ Encodable, Decodable };
 
+/// A default value type to use with KV
 #[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Debug)]
 pub enum Value {
     String(String),
@@ -25,13 +26,14 @@ pub enum Value {
     Map(HashMap<String, Value>),
 }
 
+/// The type that represents the key-value store
 pub struct KV<V> {
     cab: HashMap<String, V>,
     path: &'static str,
 }
 
 impl<V: Clone + Encodable + Decodable> KV<V> {
-    /// create a new instance of the KV store
+    /// Creates a new instance of the KV store
     pub fn new(p:&'static str) -> KV<V> {
         let mut store = KV {
             cab: HashMap::new(),
@@ -51,7 +53,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         store
     }
 
-    /// insert a key, value pair into the KV Store
+    /// Inserta a key, value pair into the key-value store
     pub fn insert(&mut self, key: String, value: V) -> Result<bool, &str> {
         // make sure mem version up to date
         let _ = self.load_from_persist();
@@ -61,7 +63,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         self.write_to_persist()
     }
 
-    /// get a value from a key
+    /// Get the value from a key
     pub fn get(&mut self, key: String) -> Option<V> {
         // make sure mem version up to date
         let _ = self.load_from_persist();
@@ -72,7 +74,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         }
     }
 
-    /// remove a key and associated value from the KV Store
+    /// Removes a key and associated value from the key-value Store
     pub fn remove(&mut self, key: String) -> Result<bool, &str> {
         // make sure mem version up to date
         let _ = self.load_from_persist();
@@ -97,8 +99,25 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         perms.set_readonly(lock);
         fs::set_permissions(path, perms).unwrap();
     }
+    
+    /// Waits for the cab to become free
+    fn wait_for_free(&self) -> Result<bool, &str> {
+        loop {
+            // check if the cab is being written to
+            let metadata = match fs::metadata(self.path) {
+                Ok(m) => m, 
+                Err(_) => return Err("File doesn't exist or is not readeable"),
+            };
 
-    /// Write the KV Store to file
+            if metadata.permissions().readonly() {
+                break;
+            }
+        }
+
+        Ok(true)
+    }
+
+    /// Writes the key-value Store to file
     fn write_to_persist(&mut self) -> Result<bool, &str> {
         if !self.wait_for_free().is_ok() {
             return Err("File doesn't exist or is not readeable"); 
@@ -128,24 +147,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         Ok(true)
     }
 
-    /// Wait for the cab to become free
-    fn wait_for_free(&self) -> Result<bool, &str> {
-        loop {
-            // check if the cab is being written to
-            let metadata = match fs::metadata(self.path) {
-                Ok(m) => m, 
-                Err(_) => return Err("File doesn't exist or is not readeable"),
-            };
-
-            if metadata.permissions().readonly() {
-                break;
-            }
-        }
-
-        Ok(true)
-    }
-
-    /// Load from file
+    /// Loads key-value store from file
     fn load_from_persist(&mut self) -> Result<bool, &str> {
         if !self.wait_for_free().is_ok() {
             return Err("File doesn't exist or is not readeable"); 
