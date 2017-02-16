@@ -26,6 +26,9 @@ pub enum Value {
     Map(HashMap<String, Value>),
 }
 
+/// Type alias for results from KV
+type KVResult = Result<bool, &'static str>;
+
 /// The type that represents the key-value store
 pub struct KV<V> {
     cab: HashMap<String, V>,
@@ -54,7 +57,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
 
     /// Inserta a key, value pair into the key-value store
-    pub fn insert(&mut self, key: String, value: V) -> Result<bool, &str> {
+    pub fn insert(&mut self, key: String, value: V) -> KVResult {
         // make sure mem version up to date
         let _ = self.load_from_persist();
         // insert into the HashMap
@@ -75,7 +78,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
 
     /// Removes a key and associated value from the key-value Store
-    pub fn remove(&mut self, key: String) -> Result<bool, &str> {
+    pub fn remove(&mut self, key: String) -> KVResult {
         // make sure mem version up to date
         let _ = self.load_from_persist();
         // remove from the HashMap
@@ -101,7 +104,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
     
     /// Waits for the cab to become free
-    fn wait_for_free(&self) -> Result<bool, &str> {
+    fn wait_for_free(&self) -> KVResult {
         loop {
             // check if the cab is being written to
             let metadata = match fs::metadata(self.path) {
@@ -118,7 +121,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
 
     /// Writes the key-value Store to file
-    fn write_to_persist(&mut self) -> Result<bool, &str> {
+    fn write_to_persist(&mut self) -> KVResult {
         if !self.wait_for_free().is_ok() {
             return Err("File doesn't exist or is not readeable"); 
         }
@@ -148,7 +151,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
 
     /// Loads key-value store from file
-    fn load_from_persist(&mut self) -> Result<bool, &str> {
+    fn load_from_persist(&mut self) -> KVResult {
         if !self.wait_for_free().is_ok() {
             return Err("File doesn't exist or is not readeable"); 
         }
