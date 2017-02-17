@@ -7,7 +7,6 @@ extern crate rustc_serialize;
 extern crate log;
 
 use std::collections::HashMap;
-use std::thread;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
