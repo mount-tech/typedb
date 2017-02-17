@@ -9,6 +9,8 @@ extern crate log;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
+use std::fs::OpenOptions;
+use std::path::Path;
 use std::io::prelude::*;
 
 use bincode::SizeLimit;
@@ -31,26 +33,46 @@ type KVResult = Result<bool, &'static str>;
 /// The type that represents the key-value store
 pub struct KV<V> {
     cab: HashMap<String, V>,
-    path: &'static str,
+    file: File,
 }
 
 impl<V: Clone + Encodable + Decodable> KV<V> {
     /// Creates a new instance of the KV store
     pub fn new(p:&'static str) -> KV<V> {
+        // if the cab doesn't exist create it
+        if !Path::new(p).exists() {
+            File::create(p).unwrap();
+        }
+
+        // make it writeable
+        let mut perms = fs::metadata(p).unwrap().permissions();
+        perms.set_readonly(false);
+        fs::set_permissions(p, perms).unwrap();
+
+        // create the file
+        let f = match OpenOptions::new().read(true).write(true).open(p) {
+            Ok(f) => f,
+            Err(e) => {
+                let perms = std::fs::metadata(p).unwrap().permissions();
+                panic!("KV::new/file creation: {}\n {:?}", e, perms);
+            }
+        };
+
+        // create the KV instance
         let mut store = KV {
             cab: HashMap::new(),
-            path: p,
+            file: f,
         };
+
+        // lock the cab for writes
+        store.lock_cab(true);
 
         match store.load_from_persist() {
             Ok(f) => trace!("{}", f),
             Err(e) => {
                 warn!("{}", e);
-                let _ = File::create(p);
             },
         };
-
-        KV::<V>::lock_cab(p, true);
 
         store
     }
@@ -95,29 +117,27 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
 
     /// Locks/unlocks cab for writing purposes
-    fn lock_cab(path:&'static str, readonly:bool) {
+    fn lock_cab(&mut self, readonly:bool) {
         // set not readonly while writing
-        let mut perms = fs::metadata(path).unwrap().permissions();
+        let mut perms = self.file.metadata().unwrap().permissions();
         perms.set_readonly(readonly);
-        fs::set_permissions(path, perms).unwrap();
+        self.file.set_permissions(perms).unwrap();
+        let _ = self.file.sync_all();
     }
-    
+
     /// Waits for the cab to become free
-    fn wait_for_free(&self, lock:bool) -> KVResult {
+    fn wait_for_free(&mut self, lock:bool) -> KVResult {
         loop {
             // check if the cab is being written to
-            let metadata = match fs::metadata(self.path) {
-                Ok(m) => m, 
+            let _ = self.file.sync_all();
+            let metadata = match self.file.metadata() {
+                Ok(m) => m,
                 Err(_) => return Err("File doesn't exist or is not readeable"),
             };
 
             if metadata.permissions().readonly() {
                 if lock {
-                    // don't call KV::lock_cab(self.path, false)
-                    // to avoid grabbing metadata again
-                    let mut perms = metadata.permissions();
-                    perms.set_readonly(false);
-                    fs::set_permissions(self.path, perms).unwrap();
+                    self.lock_cab(false);
                 }
                 break;
             }
@@ -129,7 +149,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     /// Writes the key-value Store to file
     fn write_to_persist(&mut self) -> KVResult {
         if !self.wait_for_free(true).is_ok() {
-            return Err("File doesn't exist or is not readeable"); 
+            return Err("File doesn't exist or is not readeable");
         }
 
         // encode the cab as a u8 vec
@@ -144,24 +164,12 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         const MAX_RETRIES:i32 = 5;
 
         for i in 0..MAX_RETRIES {
-            // create the file
-            let mut f = match File::create(self.path) {
-                Ok(f) => f,
-                Err(e) => {
-                    if e.kind() == std::io::ErrorKind::PermissionDenied {
-                        error!("File::create/write_to_persist: {}\n Trying again...", e);
-                        continue;
-                    }
-                    panic!("File::create/write_to_persist: {}", e);
-                }
-            };
-
             // write the bytes to it
-            match f.write_all(byte_vec.as_slice()) {
+            match self.file.write_all(byte_vec.as_slice()) {
                 Ok(_) => (),
                 Err(e) => {
-                    if i < MAX_RETRIES {
-                        error!("file.write_all: {}\n Trying again...", e);
+                    if i < MAX_RETRIES - 1 {
+                        error!("file.write_all/retry: {}", e);
                         continue;
                     }
                     panic!("file.write_all: {}", e);
@@ -169,11 +177,11 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
             }
 
             // flush to disk
-            let _ = f.flush();
-            KV::<V>::lock_cab(self.path, true);
+            let _ = self.file.flush();
+            self.lock_cab(true);
+            // leave the retry loop as successful
             break;
         }
-
 
         Ok(true)
     }
@@ -181,15 +189,12 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     /// Loads key-value store from file
     fn load_from_persist(&mut self) -> KVResult {
         if !self.wait_for_free(false).is_ok() {
-            return Err("File doesn't exist or is not readeable"); 
+            return Err("File doesn't exist or is not readeable");
         }
-
-        // open the cab
-        let mut f = File::open(self.path).unwrap();
 
         // read the bytes
         let mut byte_vec = Vec::new();
-        let _ = f.read_to_end(&mut byte_vec);
+        let _ = self.file.read_to_end(&mut byte_vec);
 
         // decode u8 vec back into HashMap
         let decoded: HashMap<String, V> = match decode(byte_vec.as_slice()) {
@@ -198,7 +203,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
                 warn!("{}", e);
                 return Err("Couldn't decode cab");
             },
-        }; 
+        };
         // assign read HashMap back to self
         self.cab = decoded;
 
@@ -213,13 +218,13 @@ mod benches {
 
     macro_rules! bench_teardown {
         ( $p:ident ) => {
-            use std::{thread, time}; 
+            use std::{thread, time};
 
-            thread::sleep(time::Duration::from_secs(2)); 
+            thread::sleep(time::Duration::from_secs(2));
             let _ = std::fs::remove_file($p);
         }
     }
-    
+
     #[bench]
     fn bench_get_int(b: &mut Bencher) {
         let test_cab_path = "./bench_get_many.cab";

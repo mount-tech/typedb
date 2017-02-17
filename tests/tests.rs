@@ -11,16 +11,16 @@ macro_rules! test_setup {
 
 macro_rules! test_teardown {
     ( $p:ident ) => {
-        use std::{thread, time}; 
+        use std::{thread, time};
 
-        thread::sleep(time::Duration::from_secs(1)); 
+        thread::sleep(time::Duration::from_secs(1));
         let _ = std::fs::remove_file($p);
     }
 }
 
 #[test]
 fn test_create() {
-    let test_cab_path ="./test_create.cab"; 
+    let test_cab_path ="./test_create.cab";
 
     let _ = std::fs::remove_file(test_cab_path);
     let _ = KV::<Value>::new(test_cab_path);
@@ -108,7 +108,7 @@ fn test_get_float() {
     {
         assert_eq!(test_store.get("key".to_string()), Some(Value::Float(0f32)));
     }
-    
+
     test_teardown!(test_cab_path);
 }
 
