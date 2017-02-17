@@ -136,25 +136,44 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
             Ok(bv) => bv,
             Err(e) => {
-                warn!("{}", e);
+                error!("encode: {}", e);
                 return Err("Could not encode cab");
             },
         };
 
-        // create the file
-        let mut f = match File::create(self.path) {
-            Ok(f) => f,
-            Err(e) => {
-                // TODO limit retries
-                error!("File::create/write_to_persist: {}", e);
-                return self.write_to_persist();
-            }
-        };
-        // write the bytes to it
-        f.write_all(byte_vec.as_slice()).unwrap();
-        let _ = f.flush();
+        const MAX_RETRIES:i32 = 5;
 
-        KV::<V>::lock_cab(self.path, true);
+        for i in 0..MAX_RETRIES {
+            // create the file
+            let mut f = match File::create(self.path) {
+                Ok(f) => f,
+                Err(e) => {
+                    if e.kind() == std::io::ErrorKind::PermissionDenied {
+                        error!("File::create/write_to_persist: {}\n Trying again...", e);
+                        continue;
+                    }
+                    panic!("File::create/write_to_persist: {}", e);
+                }
+            };
+
+            // write the bytes to it
+            match f.write_all(byte_vec.as_slice()) {
+                Ok(_) => (),
+                Err(e) => {
+                    if i < MAX_RETRIES {
+                        error!("file.write_all: {}\n Trying again...", e);
+                        continue;
+                    }
+                    panic!("file.write_all: {}", e);
+                },
+            }
+
+            // flush to disk
+            let _ = f.flush();
+            KV::<V>::lock_cab(self.path, true);
+            break;
+        }
+
 
         Ok(true)
     }
