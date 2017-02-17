@@ -216,3 +216,27 @@ fn test_multithread_instance() {
 
     test_teardown!(TEST_CAB_PATH);
 }
+
+#[test]
+fn test_multithread_instance_insert() {
+    const TEST_CAB_PATH: &'static str = "./test_multithread_instance.cab";
+
+    let t_1 = thread::spawn(|| {
+        let mut test_store = KV::<Value>::new(TEST_CAB_PATH);
+        for i in 0..1000 {
+            let _ = test_store.insert(format!("{}", i), Value::Int(i));
+        }
+    });
+
+    let t_2 = thread::spawn(|| {
+        let mut test_store = KV::<Value>::new(TEST_CAB_PATH);
+        for i in 1000..2000 {
+            let _ = test_store.insert(format!("{}", i), Value::Int(i));
+        }
+    });
+
+    assert!(t_2.join().is_ok());
+    assert!(t_1.join().is_ok());
+
+    test_teardown!(TEST_CAB_PATH);
+}

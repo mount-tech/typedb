@@ -96,15 +96,15 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
 
     /// Locks/unlocks cab for writing purposes
-    fn lock_cab(path:&'static str, lock:bool) {
+    fn lock_cab(path:&'static str, readonly:bool) {
         // set not readonly while writing
         let mut perms = fs::metadata(path).unwrap().permissions();
-        perms.set_readonly(lock);
+        perms.set_readonly(readonly);
         fs::set_permissions(path, perms).unwrap();
     }
     
     /// Waits for the cab to become free
-    fn wait_for_free(&self) -> KVResult {
+    fn wait_for_free(&self, lock:bool) -> KVResult {
         loop {
             // check if the cab is being written to
             let metadata = match fs::metadata(self.path) {
@@ -113,6 +113,13 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
             };
 
             if metadata.permissions().readonly() {
+                if lock {
+                    // don't call KV::lock_cab(self.path, false)
+                    // to avoid grabbing metadata again
+                    let mut perms = metadata.permissions();
+                    perms.set_readonly(false);
+                    fs::set_permissions(self.path, perms).unwrap();
+                }
                 break;
             }
         }
@@ -122,10 +129,9 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
 
     /// Writes the key-value Store to file
     fn write_to_persist(&mut self) -> KVResult {
-        if !self.wait_for_free().is_ok() {
+        if !self.wait_for_free(true).is_ok() {
             return Err("File doesn't exist or is not readeable"); 
         }
-        KV::<V>::lock_cab(self.path, false);
 
         // encode the cab as a u8 vec
         let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
@@ -136,29 +142,34 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
             },
         };
 
-        let path = self.path.clone();
-        let _ = thread::spawn(move || {
-            // create the file
-            let mut f = File::create(path).unwrap();
-            // write the bytes to it
-            f.write_all(byte_vec.as_slice()).unwrap();
-            let _ = f.flush();
+        // create the file
+        let mut f = match File::create(self.path) {
+            Ok(f) => f,
+            Err(e) => {
+                // TODO limit retries
+                error!("File::create/write_to_persist: {}", e);
+                return self.write_to_persist();
+            }
+        };
+        // write the bytes to it
+        f.write_all(byte_vec.as_slice()).unwrap();
+        let _ = f.flush();
 
-            KV::<V>::lock_cab(path, true);
-        });
+        KV::<V>::lock_cab(self.path, true);
 
         Ok(true)
     }
 
     /// Loads key-value store from file
     fn load_from_persist(&mut self) -> KVResult {
-        if !self.wait_for_free().is_ok() {
+        if !self.wait_for_free(false).is_ok() {
             return Err("File doesn't exist or is not readeable"); 
         }
 
         // open the cab
         let mut f = File::open(self.path).unwrap();
 
+        // read the bytes
         let mut byte_vec = Vec::new();
         let _ = f.read_to_end(&mut byte_vec);
 
@@ -170,6 +181,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
                 return Err("Couldn't decode cab");
             },
         }; 
+        // assign read HashMap back to self
         self.cab = decoded;
 
         Ok(true)
