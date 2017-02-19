@@ -18,6 +18,9 @@ use bincode::rustc_serialize::{ encode, decode };
 
 use rustc_serialize::{ Encodable, Decodable };
 
+/// The maximum number of retries the cab will make
+const MAX_RETRIES:i32 = 5;
+
 /// A default value type to use with KV
 #[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Debug)]
 pub enum Value {
@@ -44,24 +47,34 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
             File::create(p).unwrap();
         }
 
-        // make it writeable
-        let mut perms = fs::metadata(p).unwrap().permissions();
-        perms.set_readonly(false);
-        fs::set_permissions(p, perms).unwrap();
+        // Retry to get a reference to the cab file at path p
+        fn retry_get_file(p:&'static str) -> File {
+            for i in 0..MAX_RETRIES {
+                // make sure it is writeable on open
+                let mut perms = fs::metadata(p).unwrap().permissions();
+                perms.set_readonly(false);
+                fs::set_permissions(p, perms).unwrap();
 
-        // create the file
-        let f = match OpenOptions::new().read(true).write(true).open(p) {
-            Ok(f) => f,
-            Err(e) => {
-                let perms = std::fs::metadata(p).unwrap().permissions();
-                panic!("KV::new/file creation: {}\n {:?}", e, perms);
+                match OpenOptions::new().read(true).write(true).open(p) {
+                    Ok(f) => { return f; },
+                    Err(e) => {
+                        if i < MAX_RETRIES - 1 {
+                            error!("{}", e);
+                            continue;
+                        }
+
+                        let perms = std::fs::metadata(p).unwrap().permissions();
+                        panic!("retry_get_file: {}\n {:?}", e, perms);
+                    }
+                };
             }
-        };
+            panic!("retry_get_file: Failed to get file");
+        }
 
         // create the KV instance
         let mut store = KV {
             cab: HashMap::new(),
-            file: f,
+            file: retry_get_file(p),
         };
 
         // lock the cab for writes
@@ -160,8 +173,6 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
                 return Err("Could not encode cab");
             },
         };
-
-        const MAX_RETRIES:i32 = 5;
 
         for i in 0..MAX_RETRIES {
             // write the bytes to it
