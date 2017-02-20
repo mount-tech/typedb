@@ -53,7 +53,18 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
                 // make sure it is writeable on open
                 let mut perms = fs::metadata(p).unwrap().permissions();
                 perms.set_readonly(false);
-                fs::set_permissions(p, perms).unwrap();
+                match fs::set_permissions(p, perms) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        if i < MAX_RETRIES - 1 {
+                            error!("{}", e);
+                            continue;
+                        }
+
+                        let perms = std::fs::metadata(p).unwrap().permissions();
+                        panic!("retry_get_file/set_permissions: {}\n {:?}", e, perms);
+                    }
+                }
 
                 match OpenOptions::new().read(true).write(true).open(p) {
                     Ok(f) => { return f; },
@@ -64,7 +75,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
                         }
 
                         let perms = std::fs::metadata(p).unwrap().permissions();
-                        panic!("retry_get_file: {}\n {:?}", e, perms);
+                        panic!("retry_get_file/OpenOptions.open(p): {}\n {:?}", e, perms);
                     }
                 };
             }
