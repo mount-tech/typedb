@@ -5,7 +5,7 @@ use kv_cab::{ KV, Value };
 macro_rules! test_setup {
     ( $p:ident, $i:ident ) => {
         let _ = std::fs::remove_file($p);
-        let mut $i = KV::<Value>::new($p);
+        let mut $i = KV::<String, Value>::new($p);
     }
 }
 
@@ -23,7 +23,7 @@ fn test_create() {
     let test_cab_path ="./test_create.cab";
 
     let _ = std::fs::remove_file(test_cab_path);
-    let _ = KV::<Value>::new(test_cab_path);
+    let _ = KV::<String, Value>::new(test_cab_path);
 
     test_teardown!(test_cab_path);
 }
@@ -184,11 +184,11 @@ fn test_kv_all() {
 fn test_multi_instance() {
     let test_cab_path = "./test_multi_instance.cab";
     {
-        let mut test_store = KV::<Value>::new(test_cab_path);
+        let mut test_store = KV::<String, Value>::new(test_cab_path);
         let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
     }
     {
-        let mut test_store = KV::<Value>::new(test_cab_path);
+        let mut test_store = KV::<String, Value>::new(test_cab_path);
         assert!(test_store.get("key".to_string()) == Some(Value::String("value".to_string())));
         let _ = test_store.remove("key".to_string());
     }
@@ -201,12 +201,12 @@ fn test_multithread_instance() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance.cab";
 
     let t_1 = thread::spawn(|| {
-        let mut test_store = KV::<Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
         let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
     });
 
     let t_2 = thread::spawn(|| {
-        let mut test_store = KV::<Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
         let _ = test_store.get("key".to_string());
         let _ = test_store.remove("key".to_string());
     });
@@ -222,14 +222,14 @@ fn test_multithread_instance_insert() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance_insert.cab";
 
     let t_1 = thread::spawn(|| {
-        let mut test_store = KV::<Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
         for i in 0..1000 {
             let _ = test_store.insert(format!("{}", i), Value::Int(i));
         }
     });
 
     let t_2 = thread::spawn(|| {
-        let mut test_store = KV::<Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
         for i in 1000..2000 {
             let _ = test_store.insert(format!("{}", i), Value::Int(i));
         }

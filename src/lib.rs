@@ -12,6 +12,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::io::prelude::*;
+use std::hash::Hash;
 
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{ encode, decode };
@@ -34,14 +35,14 @@ pub enum Value {
 type KVResult = Result<bool, &'static str>;
 
 /// The type that represents the key-value store
-pub struct KV<V> {
-    cab: HashMap<String, V>,
+pub struct KV<K,V> {
+    cab: HashMap<K, V>,
     file: File,
 }
 
-impl<V: Clone + Encodable + Decodable> KV<V> {
+impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decodable> KV<K,V> {
     /// Creates a new instance of the KV store
-    pub fn new(p:&'static str) -> KV<V> {
+    pub fn new(p:&'static str) -> KV<K,V> {
         // if the cab doesn't exist create it
         if !Path::new(p).exists() {
             File::create(p).unwrap();
@@ -102,7 +103,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
 
     /// Inserta a key, value pair into the key-value store
-    pub fn insert(&mut self, key: String, value: V) -> KVResult {
+    pub fn insert(&mut self, key: K, value: V) -> KVResult {
         // make sure mem version up to date
         let _ = self.load_from_persist();
         // insert into the HashMap
@@ -112,7 +113,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
 
     /// Get the value from a key
-    pub fn get(&mut self, key: String) -> Option<V> {
+    pub fn get(&mut self, key: K) -> Option<V> {
         // make sure mem version up to date
         let _ = self.load_from_persist();
         // get the value from the cab
@@ -123,7 +124,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
 
     /// Removes a key and associated value from the key-value Store
-    pub fn remove(&mut self, key: String) -> KVResult {
+    pub fn remove(&mut self, key: K) -> KVResult {
         // make sure mem version up to date
         let _ = self.load_from_persist();
         // remove from the HashMap
@@ -133,7 +134,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
     }
 
     /// get all the keys contained in the KV Store
-    pub fn keys(&mut self) -> Vec<String> {
+    pub fn keys(&mut self) -> Vec<K> {
         // make sure mem version up to date
         let _ = self.load_from_persist();
         // create a vec from the cabs keys
@@ -219,7 +220,7 @@ impl<V: Clone + Encodable + Decodable> KV<V> {
         let _ = self.file.read_to_end(&mut byte_vec);
 
         // decode u8 vec back into HashMap
-        let decoded: HashMap<String, V> = match decode(byte_vec.as_slice()) {
+        let decoded: HashMap<K, V> = match decode(byte_vec.as_slice()) {
             Ok(f) => f,
             Err(e) => {
                 warn!("{}", e);
@@ -250,7 +251,7 @@ mod benches {
     #[bench]
     fn bench_get_int(b: &mut Bencher) {
         let test_cab_path = "./bench_get_many.cab";
-        let mut test_store = KV::<Value>::new(test_cab_path);
+        let mut test_store = KV::<String, Value>::new(test_cab_path);
 
         let _ = test_store.insert("test".to_string(), Value::Int(1));
 
@@ -264,7 +265,7 @@ mod benches {
     #[bench]
     fn bench_insert_int(b: &mut Bencher) {
         let test_cab_path = "./bench_insert_many.cab";
-        let mut test_store = KV::<Value>::new(test_cab_path);
+        let mut test_store = KV::<String, Value>::new(test_cab_path);
 
         b.iter(|| {
             let _ = test_store.insert("test".to_string(), Value::Int(1));
