@@ -1,25 +1,3 @@
-kv_cab
-========
-
-Simple persistent generic HashMap/Key-value store.
-
-Simpple usage:
-```rust
-extern crate kv_cab;
-
-use kv_cab::{ KV, Value };
-
-fn main() {
-    let mut test_store = KV::<String, Value>::new("./db.cab");
-
-    let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
-    println!("{:?}", test_store.get("key".to_string()));
-    let _ = test_store.remove("key".to_string());
-}
-```
-
-Usage with user defined Key and Value types:
-```rust
 extern crate kv_cab;
 extern crate rustc_serialize;
 
@@ -48,4 +26,3 @@ fn main() {
 
     let _ = std::fs::remove_file(cab_path);
 }
-```
