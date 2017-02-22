@@ -3,7 +3,7 @@ kv_cab
 
 Simple persistent generic HashMap/Key-value store.
 
-Simpple usage:
+Basic usage:
 ```rust
 extern crate kv_cab;
 
