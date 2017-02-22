@@ -24,5 +24,6 @@ fn main() {
     let _ = test_store.remove(MyKey::Int(1i32));
 
 
+    // clean up the cab
     let _ = std::fs::remove_file(cab_path);
 }
