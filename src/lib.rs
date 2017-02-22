@@ -1,6 +1,6 @@
 #![feature(test)]
-extern crate test;
 
+extern crate test;
 extern crate bincode;
 extern crate rustc_serialize;
 #[macro_use]
@@ -173,10 +173,6 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
     /// Writes the key-value Store to file
     fn write_to_persist(&mut self) -> KVResult {
-        if !self.wait_for_free(true).is_ok() {
-            return Err("File doesn't exist or is not readeable");
-        }
-
         // encode the cab as a u8 vec
         let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
             Ok(bv) => bv,
@@ -186,6 +182,10 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             },
         };
 
+        if !self.wait_for_free(true).is_ok() {
+            return Err("File doesn't exist or is not readeable");
+        }
+        // attempt to write to the cab
         for i in 0..MAX_RETRIES {
             // write the bytes to it
             match self.file.write_all(byte_vec.as_slice()) {
@@ -211,12 +211,13 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
     /// Loads key-value store from file
     fn load_from_persist(&mut self) -> KVResult {
+        // byte vec to read into
+        let mut byte_vec = Vec::new();
+
+        // wait/lock the cab and read the bytes
         if !self.wait_for_free(false).is_ok() {
             return Err("File doesn't exist or is not readeable");
         }
-
-        // read the bytes
-        let mut byte_vec = Vec::new();
         let _ = self.file.read_to_end(&mut byte_vec);
 
         // decode u8 vec back into HashMap
