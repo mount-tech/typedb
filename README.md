@@ -1,7 +1,11 @@
 kv_cab
 ========
 
+[![crates.io version](https://img.shields.io/crates/v/kv_cab.svg)](https://crates.io/crates/kv_cab)
+
 Simple persistent generic HashMap/Key-value store.
+
+[Documentation](https://docs.rs/kv_cab)
 
 Basic usage:
 ```rust
