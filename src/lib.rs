@@ -50,33 +50,29 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
         // Retry to get a reference to the cab file at path p
         fn retry_get_file(p:&'static str) -> File {
-            for i in 0..MAX_RETRIES {
+            for _ in 0..MAX_RETRIES {
                 // make sure it is writeable on open
-                let mut perms = fs::metadata(p).unwrap().permissions();
+                let mut perms = match fs::metadata(p) {
+                    Ok(f) => f.permissions(),
+                    Err(e) => {
+                        error!("{}", e);
+                        continue;
+                    },
+                };
                 perms.set_readonly(false);
                 match fs::set_permissions(p, perms) {
                     Ok(_) => (),
                     Err(e) => {
-                        if i < MAX_RETRIES - 1 {
-                            error!("{}", e);
-                            continue;
-                        }
-
-                        let perms = std::fs::metadata(p).unwrap().permissions();
-                        panic!("retry_get_file/set_permissions: {}\n {:?}", e, perms);
+                        error!("{}", e);
+                        continue;
                     }
                 }
 
                 match OpenOptions::new().read(true).write(true).open(p) {
                     Ok(f) => { return f; },
                     Err(e) => {
-                        if i < MAX_RETRIES - 1 {
-                            error!("{}", e);
-                            continue;
-                        }
-
-                        let perms = std::fs::metadata(p).unwrap().permissions();
-                        panic!("retry_get_file/OpenOptions.open(p): {}\n {:?}", e, perms);
+                        error!("{}", e);
+                        continue;
                     }
                 };
             }
