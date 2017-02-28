@@ -45,7 +45,15 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     pub fn new(p:&'static str) -> KV<K,V> {
         // if the cab doesn't exist create it
         if !Path::new(p).exists() {
-            File::create(p).unwrap();
+            for _ in 0..MAX_RETRIES {
+                match File::create(p) {
+                    Ok(_) => break,
+                    Err(e) => {
+                        error!("{}", e);
+                        continue;
+                    },
+                }
+            }
         }
 
         // Retry to get a reference to the cab file at path p
