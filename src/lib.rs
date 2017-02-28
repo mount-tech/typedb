@@ -222,11 +222,11 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             match self.file.write_all(byte_vec.as_slice()) {
                 Ok(_) => (),
                 Err(e) => {
-                    if i < MAX_RETRIES - 1 {
-                        error!("file.write_all/retry: {}", e);
-                        continue;
+                    error!("file.write_all/retry: {}", e);
+                    if i >= MAX_RETRIES - 1 {
+                        panic!("Could not write to file after retries");
                     }
-                    panic!("file.write_all: {}", e);
+                    continue;
                 },
             }
 
