@@ -45,11 +45,14 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     pub fn new(p:&'static str) -> KV<K,V> {
         // if the cab doesn't exist create it
         if !Path::new(p).exists() {
-            for _ in 0..MAX_RETRIES {
+            for i in 0..MAX_RETRIES {
                 match File::create(p) {
                     Ok(_) => break,
                     Err(e) => {
                         error!("{}", e);
+                        if i >= MAX_RETRIES - 1 {
+                            panic!("Could not create file after retries");
+                        }
                         continue;
                     },
                 }
@@ -147,11 +150,35 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
     /// Locks/unlocks cab for writing purposes
     fn lock_cab(&mut self, readonly:bool) {
-        // set not readonly while writing
-        let mut perms = self.file.metadata().unwrap().permissions();
-        perms.set_readonly(readonly);
-        self.file.set_permissions(perms).unwrap();
-        let _ = self.file.sync_all();
+        for i in 0..MAX_RETRIES {
+            // set not readonly while writing
+            let mut perms = match self.file.metadata() {
+                Ok(f) => f.permissions(),
+                Err(e) => {
+                    error!("{}", e);
+                    if i >= MAX_RETRIES - 1 {
+                        panic!("Could not set permissions after retries");
+                    }
+                    continue;
+                },
+            };
+            perms.set_readonly(readonly);
+
+
+            match self.file.set_permissions(perms) {
+                Ok(_) => {
+                    let _ = self.file.sync_all();
+                    break;
+                },
+                Err(e) => {
+                    error!("{}", e);
+                    if i >= MAX_RETRIES - 1 {
+                        panic!("Could not set permissions after retries");
+                    }
+                    continue;
+                },
+            }
+        }
     }
 
     /// Waits for the cab to become free
