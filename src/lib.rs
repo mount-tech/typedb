@@ -5,8 +5,7 @@ extern crate log;
 
 use std::collections::HashMap;
 use std::fs;
-use std::fs::File;
-use std::fs::OpenOptions;
+use std::fs::{ File, OpenOptions };
 use std::path::Path;
 use std::io::prelude::*;
 use std::hash::Hash;
