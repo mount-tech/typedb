@@ -18,6 +18,14 @@ use rustc_serialize::{ Encodable, Decodable };
 /// The maximum number of retries the cab will make
 const MAX_RETRIES:i32 = 5;
 
+macro_rules! retry {
+    ($i:ident, $b:block) => (
+        for $i in 0..MAX_RETRIES {
+            $b
+        }
+    )
+}
+
 /// A default value type to use with KV
 #[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Debug)]
 pub enum Value {
@@ -41,7 +49,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     pub fn new(p:&'static str) -> KV<K,V> {
         // if the cab doesn't exist create it
         if !Path::new(p).exists() {
-            for i in 0..MAX_RETRIES {
+            retry!(i, {
                 match File::create(p) {
                     Ok(_) => break,
                     Err(e) => {
@@ -52,12 +60,12 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                         continue;
                     },
                 }
-            }
+            });
         }
 
         // Retry to get a reference to the cab file at path p
         fn retry_get_file(p:&'static str) -> File {
-            for _ in 0..MAX_RETRIES {
+            retry!(i, {
                 // make sure it is writeable on open
                 let mut perms = match fs::metadata(p) {
                     Ok(f) => f.permissions(),
@@ -79,10 +87,14 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                     Ok(f) => { return f; },
                     Err(e) => {
                         error!("{}", e);
+                        if i >= MAX_RETRIES - 1 {
+                            panic!("Could not open file after retries");
+                        }
                         continue;
                     }
                 };
-            }
+
+            });
             panic!("retry_get_file: Failed to get file");
         }
 
@@ -146,7 +158,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
     /// Locks/unlocks cab for writing purposes
     fn lock_cab(&mut self, readonly:bool) {
-        for i in 0..MAX_RETRIES {
+        retry!(i, {
             // set not readonly while writing
             let mut perms = match self.file.metadata() {
                 Ok(f) => f.permissions(),
@@ -174,7 +186,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                     continue;
                 },
             }
-        }
+        });
     }
 
     /// Waits for the cab to become free
@@ -213,7 +225,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             return Err("File doesn't exist or is not readeable");
         }
         // attempt to write to the cab
-        for i in 0..MAX_RETRIES {
+        retry!(i, {
             // write the bytes to it
             match self.file.write_all(byte_vec.as_slice()) {
                 Ok(_) => (),
@@ -231,7 +243,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             self.lock_cab(true);
             // leave the retry loop as successful
             break;
-        }
+        });
 
         Ok(true)
     }
