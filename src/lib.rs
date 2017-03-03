@@ -18,6 +18,7 @@ use rustc_serialize::{ Encodable, Decodable };
 /// The maximum number of retries the cab will make
 const MAX_RETRIES:i32 = 5;
 
+/// Definition of a macro for retrying an operation
 macro_rules! retry {
     ($i:ident, $b:block) => (
         for $i in 0..MAX_RETRIES {
@@ -171,7 +172,6 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 },
             };
             perms.set_readonly(readonly);
-
 
             match self.file.set_permissions(perms) {
                 Ok(_) => {
