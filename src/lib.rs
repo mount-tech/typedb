@@ -57,7 +57,6 @@ extern crate log;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{ File, OpenOptions };
-use std::path::Path;
 use std::io::prelude::*;
 use std::hash::Hash;
 
@@ -67,12 +66,16 @@ use bincode::rustc_serialize::{ encode, decode };
 use rustc_serialize::{ Encodable, Decodable };
 
 /// The maximum number of retries the cab will make
-const MAX_RETRIES:i32 = 5;
+const MAX_RETRIES:i32 = 10;
 
 /// Definition of a macro for retrying an operation
 macro_rules! retry {
     ($i:ident, $b:block) => (
         for $i in 0..MAX_RETRIES {
+            if $i != 0 {
+                std::thread::park_timeout(std::time::Duration::new(0u64, 1000u32));
+            }
+
             $b
         }
     )
@@ -100,20 +103,22 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     /// Creates a new instance of the KV store
     pub fn new(p:&'static str) -> KV<K,V> {
         // if the cab doesn't exist create it
-        if !Path::new(p).exists() {
-            retry!(i, {
-                match File::create(p) {
-                    Ok(_) => break,
-                    Err(e) => {
-                        error!("{}", e);
-                        if i >= MAX_RETRIES - 1 {
-                            panic!("Could not create file after retries");
-                        }
-                        continue;
-                    },
-                }
-            });
-        }
+        retry!(i, {
+            match OpenOptions::new().write(true).create(true).open(p) {
+                Ok(_) => break,
+                Err(e) => {
+                    error!("{}", e);
+                    if e.kind() == std::io::ErrorKind::PermissionDenied || 
+                        e.kind() == std::io::ErrorKind::AlreadyExists {
+                        break;
+                    }
+                    if i >= MAX_RETRIES - 1 {
+                        panic!("Could not create file after retries");
+                    }
+                    continue;
+                },
+            }
+        });
 
         // Retry to get a reference to the cab file at path p
         fn retry_get_file(p:&'static str) -> File {
