@@ -107,11 +107,12 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             match OpenOptions::new().write(true).create(true).open(p) {
                 Ok(_) => break,
                 Err(e) => {
-                    error!("{}", e);
+                    // handle if the db is already in place
                     if e.kind() == std::io::ErrorKind::PermissionDenied || 
                         e.kind() == std::io::ErrorKind::AlreadyExists {
                         break;
                     }
+                    error!("{}", e);
                     if i >= MAX_RETRIES - 1 {
                         panic!("Could not create file after retries");
                     }
