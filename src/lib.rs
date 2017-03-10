@@ -102,46 +102,32 @@ pub struct KV<K,V> {
 impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decodable> KV<K,V> {
     /// Creates a new instance of the KV store
     pub fn new(p:&'static str) -> KV<K,V> {
-        // if the cab doesn't exist create it
-        retry!(i, {
-            match OpenOptions::new().write(true).create(true).open(p) {
-                Ok(_) => break,
-                Err(e) => {
-                    // handle if the db is already in place
-                    if e.kind() == std::io::ErrorKind::PermissionDenied || 
-                        e.kind() == std::io::ErrorKind::AlreadyExists {
-                        break;
-                    }
-                    error!("{}", e);
-                    if i >= MAX_RETRIES - 1 {
-                        panic!("Could not create file after retries");
-                    }
-                    continue;
-                },
-            }
-        });
-
-        // Retry to get a reference to the cab file at path p
+        // Retry to get a reference to the cab file at path p and create if doesn't exist
         fn retry_get_file(p:&'static str) -> File {
             retry!(i, {
                 // make sure it is writeable on open
-                let mut perms = match fs::metadata(p) {
-                    Ok(f) => f.permissions(),
-                    Err(e) => {
-                        error!("{}", e);
-                        continue;
+                match fs::metadata(p) {
+                    Ok(f) => {
+                        let mut perms = f.permissions();
+                        perms.set_readonly(false);
+
+                        match fs::set_permissions(p, perms) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                error!("{}", e);
+                                continue;
+                            }
+                        }
                     },
-                };
-                perms.set_readonly(false);
-                match fs::set_permissions(p, perms) {
-                    Ok(_) => (),
                     Err(e) => {
-                        error!("{}", e);
-                        continue;
-                    }
+                        if e.kind() != std::io::ErrorKind::NotFound {
+                            error!("{}", e);
+                            continue;
+                        }
+                    },
                 }
 
-                match OpenOptions::new().read(true).write(true).open(p) {
+                match OpenOptions::new().read(true).write(true).create(true).open(p) {
                     Ok(f) => { return f; },
                     Err(e) => {
                         error!("{}", e);
