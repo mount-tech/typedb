@@ -102,50 +102,11 @@ pub struct KV<K,V> {
 impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decodable> KV<K,V> {
     /// Creates a new instance of the KV store
     pub fn new(p:&'static str) -> KV<K,V> {
-        // Retry to get a reference to the cab file at path p and create if doesn't exist
-        fn retry_get_file(p:&'static str) -> File {
-            retry!(i, {
-                // make sure it is writeable on open
-                match fs::metadata(p) {
-                    Ok(f) => {
-                        let mut perms = f.permissions();
-                        perms.set_readonly(false);
-
-                        match fs::set_permissions(p, perms) {
-                            Ok(_) => (),
-                            Err(e) => {
-                                error!("{}", e);
-                                continue;
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        if e.kind() != std::io::ErrorKind::NotFound {
-                            error!("{}", e);
-                            continue;
-                        }
-                    },
-                }
-
-                match OpenOptions::new().read(true).write(true).create(true).open(p) {
-                    Ok(f) => { return f; },
-                    Err(e) => {
-                        error!("{}", e);
-                        if i >= MAX_RETRIES - 1 {
-                            panic!("Could not open file after retries");
-                        }
-                        continue;
-                    }
-                };
-
-            });
-            panic!("retry_get_file: Failed to get file");
-        }
 
         // create the KV instance
         let mut store = KV {
             cab: HashMap::new(),
-            file: retry_get_file(p),
+            file: KV::<K, V>::retry_get_file(p),
         };
 
         // lock the cab for writes
@@ -159,6 +120,47 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         };
 
         store
+    }
+
+    /// Sets file permission to not readonly it is writeable on open
+    fn set_path_permission(p: &'static str) {
+        match fs::metadata(p) {
+            Ok(f) => {
+                let mut perms = f.permissions();
+                perms.set_readonly(false);
+
+                match fs::set_permissions(p, perms) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        error!("{}", e);
+                    }
+                }
+            },
+            Err(e) => {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    error!("{}", e);
+                }
+            },
+        }
+    }
+
+    /// Retry to get a reference to the cab file at path p and create if doesn't exist
+    fn retry_get_file(p:&'static str) -> File {
+        retry!(i, {
+            match OpenOptions::new().read(true).write(true).create(true).open(p) {
+                Ok(f) => { return f; },
+                Err(e) => {
+                    error!("{}", e);
+                    if i >= MAX_RETRIES - 1 {
+                        panic!("Could not open file after retries");
+                    }
+                    KV::<K, V>::set_path_permission(p);
+                    continue;
+                }
+            };
+
+        });
+        panic!("retry_get_file: Failed to get file");
     }
 
     /// Inserta a key, value pair into the key-value store
