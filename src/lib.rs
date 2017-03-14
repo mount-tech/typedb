@@ -102,7 +102,6 @@ pub struct KV<K,V> {
 impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decodable> KV<K,V> {
     /// Creates a new instance of the KV store
     pub fn new(p:&'static str) -> KV<K,V> {
-
         // create the KV instance
         let mut store = KV {
             cab: HashMap::new(),

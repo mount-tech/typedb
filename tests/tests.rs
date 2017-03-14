@@ -207,7 +207,8 @@ fn test_multithread_instance() {
 
     let t_2 = thread::spawn(|| {
         let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
-        let _ = test_store.get("key".to_string());
+        std::thread::sleep(std::time::Duration::new(1u64, 0u32));
+        let _ = test_store.get("key".to_string()).unwrap();
         let _ = test_store.remove("key".to_string());
     });
 
@@ -233,6 +234,28 @@ fn test_multithread_instance_insert() {
         for i in 1000..2000 {
             let _ = test_store.insert(format!("{}", i), Value::Int(i));
         }
+    });
+
+    assert!(t_2.join().is_ok());
+    assert!(t_1.join().is_ok());
+
+    test_teardown!(TEST_CAB_PATH);
+}
+
+#[test]
+fn test_multithread_instance_read_between() {
+    const TEST_CAB_PATH: &'static str = "./test_multithread_instance_read_between.cab";
+
+    let t_1 = thread::spawn(|| {
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
+        let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
+    });
+
+    let t_2 = thread::spawn(|| {
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
+        std::thread::sleep(std::time::Duration::new(1u64, 0u32));
+        assert!(test_store.get("key".to_string()).unwrap() == Value::String("value".to_string()));
+        let _ = test_store.remove("key".to_string());
     });
 
     assert!(t_2.join().is_ok());
