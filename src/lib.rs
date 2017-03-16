@@ -91,7 +91,18 @@ pub enum Value {
 }
 
 /// Type alias for results from KV
-type KVResult = Result<bool, &'static str>;
+type KVResult = Result<bool, KVError>;
+
+/// Errors that KV might have
+#[derive(Debug, PartialEq)]
+pub enum KVError {
+    CabEmpty,
+    CouldntDecode,
+    DoesntExistOrNotReadable,
+    CouldntEncode,
+    CouldntWrite,
+}
+
 
 /// The type that represents the key-value store
 pub struct KV<K,V> {
@@ -114,7 +125,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         match store.load_from_persist() {
             Ok(f) => trace!("{}", f),
             Err(e) => {
-                warn!("{}", e);
+                warn!("{:?}", e);
             },
         };
 
@@ -240,7 +251,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             let _ = self.file.sync_all();
             let metadata = match self.file.metadata() {
                 Ok(m) => m,
-                Err(_) => return Err("File doesn't exist or is not readeable"),
+                Err(_) => return Err(KVError::DoesntExistOrNotReadable),
             };
 
             if metadata.permissions().readonly() {
@@ -261,12 +272,12 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             Ok(bv) => bv,
             Err(e) => {
                 error!("encode: {}", e);
-                return Err("Could not encode cab");
+                return Err(KVError::CouldntEncode);
             },
         };
 
         if !self.wait_for_free(true).is_ok() {
-            return Err("File doesn't exist or is not readeable");
+            return Err(KVError::DoesntExistOrNotReadable);
         }
         // attempt to write to the cab
         retry!(i, {
@@ -276,7 +287,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Err(e) => {
                     error!("file.write_all/retry: {}", e);
                     if i >= MAX_RETRIES - 1 {
-                        panic!("Could not write to file after retries");
+                        panic!(KVError::CouldntWrite);
                     }
                     continue;
                 },
@@ -299,16 +310,19 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
         // wait/lock the cab and read the bytes
         if !self.wait_for_free(false).is_ok() {
-            return Err("File doesn't exist or is not readeable");
+            return Err(KVError::DoesntExistOrNotReadable);
         }
         let _ = self.file.read_to_end(&mut byte_vec);
+        if byte_vec.is_empty() {
+            return Err(KVError::CabEmpty);
+        }
 
         // decode u8 vec back into HashMap
         let decoded: HashMap<K, V> = match decode(byte_vec.as_slice()) {
             Ok(f) => f,
             Err(e) => {
                 warn!("{}", e);
-                return Err("Couldn't decode cab");
+                return Err(KVError::CouldntDecode);
             },
         };
         // assign read HashMap back to self
