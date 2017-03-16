@@ -29,6 +29,22 @@ fn test_create() {
 }
 
 #[test]
+fn test_create_wrong_type() {
+    let test_cab_path ="./test_create_wrong_type.cab";
+
+    let _ = std::fs::remove_file(test_cab_path);
+
+    let mut test_store = KV::<String, Value>::new(test_cab_path);
+    let res = test_store.insert("key".to_string(), Value::String("value".to_string()));
+    assert_eq!(res, Ok(true));
+
+    let mut test_store_2 = KV::<i32, Value>::new(test_cab_path);
+    assert_eq!(test_store_2.keys().len(), 0);
+
+    test_teardown!(test_cab_path);
+}
+
+#[test]
 fn test_insert_string() {
     let test_cab_path = "./text_insert_string.cab";
     test_setup!(test_cab_path, test_store);
@@ -226,6 +242,7 @@ fn test_multithread_instance_insert() {
         let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
         for i in 0..1000 {
             assert!(test_store.insert(format!("{}", i), Value::Int(i)) == Ok(true));
+            assert!(test_store.get(format!("{}", i)).is_some());
         }
     });
 
@@ -233,11 +250,61 @@ fn test_multithread_instance_insert() {
         let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
         for i in 1000..2000 {
             assert!(test_store.insert(format!("{}", i), Value::Int(i)) == Ok(true));
+            assert!(test_store.get(format!("{}", i)).is_some());
         }
     });
 
     assert!(t_2.join().is_ok());
     assert!(t_1.join().is_ok());
+
+    test_teardown!(TEST_CAB_PATH);
+}
+
+#[test]
+fn test_multithread_many_instance_insert() {
+    const TEST_CAB_PATH: &'static str = "./test_multithread_many_instance_insert.cab";
+    let mut check_store = KV::<i32, Value>::new(TEST_CAB_PATH);
+
+    let t_1 = thread::spawn(|| {
+        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH);
+        for i in 0..1000 {
+            assert!(test_store.insert(i, Value::Int(i)) == Ok(true));
+            assert!(test_store.get(i).is_some());
+        }
+    });
+
+    let t_2 = thread::spawn(|| {
+        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH);
+        for i in 0..1000 {
+            assert!(test_store.insert(i, Value::Int(i)) == Ok(true));
+            assert!(test_store.get(i).is_some());
+        }
+    });
+
+    let t_3 = thread::spawn(|| {
+        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH);
+        for i in 1000..2000 {
+            assert!(test_store.insert(i, Value::Int(i)) == Ok(true));
+            assert!(test_store.get(i).is_some());
+        }
+    });
+
+    let t_4 = thread::spawn(|| {
+        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH);
+        for i in 1000..2000 {
+            assert!(test_store.insert(i, Value::Int(i)) == Ok(true));
+            assert!(test_store.get(i).is_some());
+        }
+    });
+
+    assert!(t_1.join().is_ok());
+    assert!(t_2.join().is_ok());
+    assert!(t_3.join().is_ok());
+    assert!(t_4.join().is_ok());
+
+    for i in 0..2000 {
+        assert!(check_store.get(i).unwrap() == Value::Int(i));
+    }
 
     test_teardown!(TEST_CAB_PATH);
 }
