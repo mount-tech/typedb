@@ -9,7 +9,7 @@ extern crate kv_cab;
 use kv_cab::{ KV, Value };
 
 fn main() {
-    let mut test_store = KV::<String, Value>::new("./db.cab");
+    let mut test_store = KV::<String, Value>::new("./db.cab").unwrap();
 
     let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
     println!("{:?}", test_store.get("key".to_string()));
@@ -38,7 +38,7 @@ enum MyValue {
 }
 
 fn main() {
-    let mut test_store = KV::<MyKey, MyValue>::new("./db.cab");
+    let mut test_store = KV::<MyKey, MyValue>::new("./db.cab").unwrap();
 
     let _ = test_store.insert(MyKey::Int(1i32), MyValue::String("value".to_string()));
     println!("{:?}", test_store.get(MyKey::Int(1i32)));
@@ -101,6 +101,8 @@ pub enum KVError {
     DoesntExistOrNotReadable,
     CouldntEncode,
     CouldntWrite,
+    CouldntSetPermissions,
+    CoudlntGetPermissions,
 }
 
 /// The type that represents the key-value store
@@ -119,7 +121,9 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         };
 
         // lock the cab for writes
-        store.lock_cab(true);
+        if let Err(e) = store.lock_cab(true) {
+            return Err(e);
+        }
 
         match store.load_from_persist() {
             Ok(f) => trace!("{}", f),
@@ -134,7 +138,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         Ok(store)
     }
 
-    /// Sets file permission to not readonly it is writeable on open
+    /// Sets file permission for a path to not be readonly 
     fn set_path_permission(p: &'static str) {
         match fs::metadata(p) {
             Ok(f) => {
@@ -216,7 +220,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     }
 
     /// Locks/unlocks cab for writing purposes
-    fn lock_cab(&mut self, readonly:bool) {
+    fn lock_cab(&mut self, readonly:bool) -> KVResult {
         retry!(i, {
             // set not readonly while writing
             let mut perms = match self.file.metadata() {
@@ -224,7 +228,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Err(e) => {
                     error!("{}", e);
                     if i >= MAX_RETRIES - 1 {
-                        panic!("Could not set permissions after retries");
+                        return Err(KVError::CoudlntGetPermissions); 
                     }
                     continue;
                 },
@@ -239,12 +243,14 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Err(e) => {
                     error!("{}", e);
                     if i >= MAX_RETRIES - 1 {
-                        panic!("Could not set permissions after retries");
+                        return Err(KVError::CouldntSetPermissions);
                     }
                     continue;
                 },
             }
         });
+
+        Ok(true)
     }
 
     /// Waits for the cab to become free
@@ -259,7 +265,9 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
             if metadata.permissions().readonly() {
                 if lock {
-                    self.lock_cab(false);
+                    if let Err(e) = self.lock_cab(false) {
+                        return Err(e);
+                    }
                 }
                 break;
             }
@@ -298,7 +306,13 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
             // flush to disk
             let _ = self.file.flush();
-            self.lock_cab(true);
+            if let Err(e) = self.lock_cab(true) {
+                if i >= MAX_RETRIES - 1 {
+                    return Err(e);
+                }
+                error!("{:?}", e);
+            }
+
             // leave the retry loop as successful
             break;
         });
@@ -324,7 +338,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         let decoded: HashMap<K, V> = match decode(byte_vec.as_slice()) {
             Ok(f) => f,
             Err(e) => {
-                warn!("{}", e);
+                error!("{}", e);
                 return Err(KVError::CouldntDecode);
             },
         };
