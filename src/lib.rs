@@ -103,7 +103,6 @@ pub enum KVError {
     CouldntWrite,
 }
 
-
 /// The type that represents the key-value store
 pub struct KV<K,V> {
     cab: HashMap<K, V>,
@@ -112,7 +111,7 @@ pub struct KV<K,V> {
 
 impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decodable> KV<K,V> {
     /// Creates a new instance of the KV store
-    pub fn new(p:&'static str) -> KV<K,V> {
+    pub fn new(p:&'static str) -> Result<KV<K,V>, KVError> {
         // create the KV instance
         let mut store = KV {
             cab: HashMap::new(),
@@ -125,11 +124,14 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         match store.load_from_persist() {
             Ok(f) => trace!("{}", f),
             Err(e) => {
+                if e == KVError::CouldntDecode {
+                    return Err(e);
+                }
                 warn!("{:?}", e);
             },
         };
 
-        store
+        Ok(store)
     }
 
     /// Sets file permission to not readonly it is writeable on open
@@ -164,6 +166,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                     if i >= MAX_RETRIES - 1 {
                         panic!("Could not open file after retries");
                     }
+
                     KV::<K, V>::set_path_permission(p);
                     continue;
                 }

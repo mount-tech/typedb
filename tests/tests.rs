@@ -5,7 +5,7 @@ use kv_cab::{ KV, Value };
 macro_rules! test_setup {
     ( $p:ident, $i:ident ) => {
         let _ = std::fs::remove_file($p);
-        let mut $i = KV::<String, Value>::new($p);
+        let mut $i = KV::<String, Value>::new($p).unwrap();
     }
 }
 
@@ -23,7 +23,7 @@ fn test_create() {
     let test_cab_path ="./test_create.cab";
 
     let _ = std::fs::remove_file(test_cab_path);
-    let _ = KV::<String, Value>::new(test_cab_path);
+    assert!(KV::<String, Value>::new(test_cab_path).is_ok());
 
     test_teardown!(test_cab_path);
 }
@@ -34,12 +34,11 @@ fn test_create_wrong_type() {
 
     let _ = std::fs::remove_file(test_cab_path);
 
-    let mut test_store = KV::<String, Value>::new(test_cab_path);
+    let mut test_store = KV::<String, Value>::new(test_cab_path).unwrap();
     let res = test_store.insert("key".to_string(), Value::String("value".to_string()));
     assert_eq!(res, Ok(true));
 
-    let mut test_store_2 = KV::<i32, Value>::new(test_cab_path);
-    assert_eq!(test_store_2.keys().len(), 0);
+    assert!(KV::<i32, Value>::new(test_cab_path).is_err());
 
     test_teardown!(test_cab_path);
 }
@@ -200,11 +199,11 @@ fn test_kv_all() {
 fn test_multi_instance() {
     let test_cab_path = "./test_multi_instance.cab";
     {
-        let mut test_store = KV::<String, Value>::new(test_cab_path);
+        let mut test_store = KV::<String, Value>::new(test_cab_path).unwrap();
         assert!(test_store.insert("key".to_string(), Value::String("value".to_string())) == Ok(true));
     }
     {
-        let mut test_store = KV::<String, Value>::new(test_cab_path);
+        let mut test_store = KV::<String, Value>::new(test_cab_path).unwrap();
         assert!(test_store.get("key".to_string()) == Some(Value::String("value".to_string())));
         assert!(test_store.remove("key".to_string()) == Ok(true));
     }
@@ -217,12 +216,12 @@ fn test_multithread_instance() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance.cab";
 
     let t_1 = thread::spawn(|| {
-        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
         assert!(test_store.insert("key".to_string(), Value::String("value".to_string())) == Ok(true));
     });
 
     let t_2 = thread::spawn(|| {
-        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
         std::thread::sleep(std::time::Duration::new(1u64, 0u32));
         assert!(test_store.get("key".to_string()).is_some());
         assert!(test_store.remove("key".to_string()) == Ok(true));
@@ -239,7 +238,7 @@ fn test_multithread_instance_insert() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance_insert.cab";
 
     let t_1 = thread::spawn(|| {
-        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 0..1000 {
             assert!(test_store.insert(format!("{}", i), Value::Int(i)) == Ok(true));
             assert!(test_store.get(format!("{}", i)).is_some());
@@ -247,7 +246,7 @@ fn test_multithread_instance_insert() {
     });
 
     let t_2 = thread::spawn(|| {
-        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 1000..2000 {
             assert!(test_store.insert(format!("{}", i), Value::Int(i)) == Ok(true));
             assert!(test_store.get(format!("{}", i)).is_some());
@@ -263,10 +262,10 @@ fn test_multithread_instance_insert() {
 #[test]
 fn test_multithread_many_instance_insert() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_many_instance_insert.cab";
-    let mut check_store = KV::<i32, Value>::new(TEST_CAB_PATH);
+    let mut check_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
 
     let t_1 = thread::spawn(|| {
-        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 0..1000 {
             assert!(test_store.insert(i, Value::Int(i)) == Ok(true));
             assert!(test_store.get(i).is_some());
@@ -274,7 +273,7 @@ fn test_multithread_many_instance_insert() {
     });
 
     let t_2 = thread::spawn(|| {
-        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 0..1000 {
             assert!(test_store.insert(i, Value::Int(i)) == Ok(true));
             assert!(test_store.get(i).is_some());
@@ -282,7 +281,7 @@ fn test_multithread_many_instance_insert() {
     });
 
     let t_3 = thread::spawn(|| {
-        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 1000..2000 {
             assert!(test_store.insert(i, Value::Int(i)) == Ok(true));
             assert!(test_store.get(i).is_some());
@@ -290,7 +289,7 @@ fn test_multithread_many_instance_insert() {
     });
 
     let t_4 = thread::spawn(|| {
-        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 1000..2000 {
             assert!(test_store.insert(i, Value::Int(i)) == Ok(true));
             assert!(test_store.get(i).is_some());
@@ -314,12 +313,12 @@ fn test_multithread_instance_read_between() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance_read_between.cab";
 
     let t_1 = thread::spawn(|| {
-        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
         assert!(test_store.insert("key".to_string(), Value::String("value".to_string())) == Ok(true));
     });
 
     let t_2 = thread::spawn(|| {
-        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH);
+        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
         std::thread::sleep(std::time::Duration::new(1u64, 0u32));
         assert!(test_store.get("key".to_string()).unwrap() == Value::String("value".to_string()));
         assert!(test_store.remove("key".to_string()) == Ok(true));
