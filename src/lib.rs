@@ -143,7 +143,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         match store.load_from_persist() {
             Ok(f) => trace!("{}", f),
             Err(e) => {
-                if e == KVError::CouldntDecode {
+                if e != KVError::CabEmpty {
                     return Err(e);
                 }
                 warn!("{:?}", e);
@@ -345,9 +345,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                     return Err(e);
                 }
             }
-
             return Ok(true);
-
         });
 
         Err(KVError::CouldntWrite)
@@ -372,7 +370,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         match self.file.read_to_end(&mut byte_vec) {
             Ok(count) => {
                 if count == 0 {
-                    return Err(KVError::CabEmpty);
+                    return Ok(true);
                 }
             },
             Err(e) => {
