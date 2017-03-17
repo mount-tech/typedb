@@ -96,16 +96,27 @@ type KVResult = Result<bool, KVError>;
 /// Errors that KV might have
 #[derive(Debug, PartialEq)]
 pub enum KVError {
+    /// Cab did not contain anything on disk
     CabEmpty,
+    /// Could not decode the cab from disk
     CouldntDecode,
+    /// Cab was either not readable from disk or doesn't exist
     DoesntExistOrNotReadable,
+    /// Couldn't encode the hashmap for writing to disk
     CouldntEncode,
+    /// Could not write to the cab on disk
     CouldntWrite,
+    /// Could not set the access permissions for the cab
     CouldntSetPermissions,
+    /// Could get the permissions that the cab has on disk
     CoudlntGetPermissions,
+    /// Failed to read the cab from disk
     FailedToRead,
+    /// Could not sync the metadata with the disk
     CouldntSyncMetadata,
+    /// Could not flush the data to disk
     CouldntFlush,
+    /// Could not open the file from disk
     CouldntOpen,
 }
 
