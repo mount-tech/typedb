@@ -103,6 +103,7 @@ pub enum KVError {
     CouldntWrite,
     CouldntSetPermissions,
     CoudlntGetPermissions,
+    FailedToRead,
 }
 
 /// The type that represents the key-value store
@@ -183,7 +184,9 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     /// Inserta a key, value pair into the key-value store
     pub fn insert(&mut self, key: K, value: V) -> KVResult {
         // make sure mem version up to date
-        let _ = self.load_from_persist();
+        if let Err(e) = self.load_from_persist() {
+            return Err(e);
+        }
         // insert into the HashMap
         self.cab.insert(key, value);
         // persist
@@ -191,20 +194,24 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     }
 
     /// Get the value from a key
-    pub fn get(&mut self, key: K) -> Option<V> {
+    pub fn get(&mut self, key: K) -> Result<Option<V>, KVError> {
         // make sure mem version up to date
-        let _ = self.load_from_persist();
+        if let Err(e) = self.load_from_persist() {
+            return Err(e);
+        }
         // get the value from the cab
         match self.cab.get(&key) {
-            Some(v) => Some((*v).clone()),
-            None => None
+            Some(v) => Ok(Some((*v).clone())),
+            None => Ok(None),
         }
     }
 
     /// Removes a key and associated value from the key-value Store
     pub fn remove(&mut self, key: K) -> KVResult {
         // make sure mem version up to date
-        let _ = self.load_from_persist();
+        if let Err(e) = self.load_from_persist() {
+            return Err(e);
+        }
         // remove from the HashMap
         self.cab.remove(&key);
         // persist
@@ -212,11 +219,13 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     }
 
     /// get all the keys contained in the KV Store
-    pub fn keys(&mut self) -> Vec<K> {
+    pub fn keys(&mut self) -> Result<Vec<K>, KVError> {
         // make sure mem version up to date
-        let _ = self.load_from_persist();
+        if let Err(e) = self.load_from_persist() {
+            return Err(e);
+        }
         // create a vec from the cabs keys
-        self.cab.keys().map(|k| k.clone()).collect()
+        Ok(self.cab.keys().map(|k| k.clone()).collect())
     }
 
     /// Locks/unlocks cab for writing purposes
@@ -329,9 +338,16 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         if !self.wait_for_free(false).is_ok() {
             return Err(KVError::DoesntExistOrNotReadable);
         }
-        let _ = self.file.read_to_end(&mut byte_vec);
-        if byte_vec.is_empty() {
-            return Err(KVError::CabEmpty);
+        match self.file.read_to_end(&mut byte_vec) {
+            Ok(count) => {
+                if count == 0 {
+                    return Err(KVError::CabEmpty);
+                }
+            },
+            Err(e) => {
+                error!("{}", e);
+                return Err(KVError::FailedToRead);
+            },
         }
 
         // decode u8 vec back into HashMap
