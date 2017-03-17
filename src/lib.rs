@@ -104,6 +104,8 @@ pub enum KVError {
     CouldntSetPermissions,
     CoudlntGetPermissions,
     FailedToRead,
+    CouldntSyncMetadata,
+    CouldntFlush,
 }
 
 /// The type that represents the key-value store
@@ -246,7 +248,10 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
             match self.file.set_permissions(perms) {
                 Ok(_) => {
-                    let _ = self.file.sync_all();
+                    if let Err(e) = self.file.sync_all() {
+                        error!("{}", e);
+                        return Err(KVError::CouldntSyncMetadata);
+                    }
                     break;
                 },
                 Err(e) => {
@@ -266,7 +271,10 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     fn wait_for_free(&mut self, lock:bool) -> KVResult {
         loop {
             // check if the cab is being written to
-            let _ = self.file.sync_all();
+            if let Err(e) = self.file.sync_all() {
+                error!("{}", e);
+                return Err(KVError::CouldntSyncMetadata);
+            }
             let metadata = match self.file.metadata() {
                 Ok(m) => m,
                 Err(_) => return Err(KVError::DoesntExistOrNotReadable),
@@ -314,7 +322,10 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             }
 
             // flush to disk
-            let _ = self.file.flush();
+            if let Err(e) = self.file.flush() {
+                error!("{}", e);
+                return Err(KVError::CouldntFlush);
+            }
             if let Err(e) = self.lock_cab(true) {
                 if i >= MAX_RETRIES - 1 {
                     return Err(e);
