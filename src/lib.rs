@@ -106,6 +106,7 @@ pub enum KVError {
     FailedToRead,
     CouldntSyncMetadata,
     CouldntFlush,
+    CouldntOpen,
 }
 
 /// The type that represents the key-value store
@@ -120,7 +121,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         // create the KV instance
         let mut store = KV {
             cab: HashMap::new(),
-            file: KV::<K, V>::retry_get_file(p),
+            file: KV::<K, V>::retry_get_file(p).unwrap(),
         };
 
         // lock the cab for writes
@@ -141,7 +142,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         Ok(store)
     }
 
-    /// Sets file permission for a path to not be readonly 
+    /// Sets file permission for a path to not be readonly
     fn set_path_permission(p: &'static str) {
         match fs::metadata(p) {
             Ok(f) => {
@@ -164,14 +165,14 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     }
 
     /// Retry to get a reference to the cab file at path p and create if doesn't exist
-    fn retry_get_file(p:&'static str) -> File {
+    fn retry_get_file(p:&'static str) -> Result<File, KVError> {
         retry!(i, {
             match OpenOptions::new().read(true).write(true).create(true).open(p) {
-                Ok(f) => { return f; },
+                Ok(f) => { return Ok(f); },
                 Err(e) => {
                     error!("{}", e);
                     if i >= MAX_RETRIES - 1 {
-                        panic!("Could not open file after retries");
+                        return Err(KVError::CouldntOpen);
                     }
 
                     KV::<K, V>::set_path_permission(p);
@@ -180,7 +181,8 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             };
 
         });
-        panic!("retry_get_file: Failed to get file");
+
+        Err(KVError::CouldntOpen)
     }
 
     /// Inserta a key, value pair into the key-value store
@@ -239,7 +241,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Err(e) => {
                     error!("{}", e);
                     if i >= MAX_RETRIES - 1 {
-                        return Err(KVError::CoudlntGetPermissions); 
+                        return Err(KVError::CoudlntGetPermissions);
                     }
                     continue;
                 },
@@ -315,7 +317,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Err(e) => {
                     error!("file.write_all/retry: {}", e);
                     if i >= MAX_RETRIES - 1 {
-                        panic!(KVError::CouldntWrite);
+                        return Err(KVError::CouldntWrite);
                     }
                     continue;
                 },
@@ -327,17 +329,17 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 return Err(KVError::CouldntFlush);
             }
             if let Err(e) = self.lock_cab(true) {
+                error!("{:?}", e);
                 if i >= MAX_RETRIES - 1 {
                     return Err(e);
                 }
-                error!("{:?}", e);
             }
 
-            // leave the retry loop as successful
-            break;
+            return Ok(true);
+
         });
 
-        Ok(true)
+        Err(KVError::CouldntWrite)
     }
 
     /// Loads key-value store from file
@@ -349,6 +351,13 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         if !self.wait_for_free(false).is_ok() {
             return Err(KVError::DoesntExistOrNotReadable);
         }
+
+        if let Err(e) = self.file.sync_all() {
+            error!("{}", e);
+            return Err(KVError::CouldntSyncMetadata);
+        }
+
+        // read the file into the buffer
         match self.file.read_to_end(&mut byte_vec) {
             Ok(count) => {
                 if count == 0 {
