@@ -361,15 +361,11 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             return Err(KVError::DoesntExistOrNotReadable);
         }
 
-        if let Err(e) = self.file.sync_all() {
-            error!("{}", e);
-            return Err(KVError::CouldntSyncMetadata);
-        }
-
         // read the file into the buffer
         match self.file.read_to_end(&mut byte_vec) {
             Ok(count) => {
                 if count == 0 {
+                    // don't attempt to decode as empty
                     return Ok(true);
                 }
             },

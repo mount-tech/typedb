@@ -305,7 +305,7 @@ fn test_multithread_many_instance_insert() {
     assert!(t_4.join().is_ok());
 
     for i in 0..2000 {
-        assert_eq!(check_store.get(i).unwrap().unwrap(), Value::Int(i));
+        assert_eq!(check_store.get(i).unwrap(), Some(Value::Int(i)));
     }
 
     test_teardown!(TEST_CAB_PATH);
