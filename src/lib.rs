@@ -154,23 +154,26 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     }
 
     /// Sets file permission for a path to not be readonly
-    fn set_path_permission(p: &'static str) {
+    fn set_path_permission(p: &'static str) -> KVResult {
         match fs::metadata(p) {
             Ok(f) => {
                 let mut perms = f.permissions();
                 perms.set_readonly(false);
 
                 match fs::set_permissions(p, perms) {
-                    Ok(_) => (),
+                    Ok(_) => return Ok(true),
                     Err(e) => {
                         error!("{}", e);
+                        return Err(KVError::CouldntSetPermissions);
                     }
                 }
             },
             Err(e) => {
                 if e.kind() != std::io::ErrorKind::NotFound {
                     error!("{}", e);
+                    return Err(KVError::CoudlntGetPermissions);
                 }
+                return Ok(true);
             },
         }
     }
@@ -186,7 +189,11 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                         return Err(KVError::CouldntOpen);
                     }
 
-                    KV::<K, V>::set_path_permission(p);
+                    if let Err(e) = KV::<K, V>::set_path_permission(p) {
+                        if i >= MAX_RETRIES - 1 {
+                            return Err(e);
+                        }
+                    }
                     continue;
                 }
             };
