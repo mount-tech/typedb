@@ -53,9 +53,9 @@ extern crate bincode;
 extern crate rustc_serialize;
 #[macro_use]
 extern crate log;
+extern crate fs2;
 
 use std::collections::HashMap;
-use std::fs;
 use std::fs::{ File, OpenOptions };
 use std::io::prelude::*;
 use std::io::SeekFrom;
@@ -65,6 +65,8 @@ use bincode::SizeLimit;
 use bincode::rustc_serialize::{ encode, decode };
 
 use rustc_serialize::{ Encodable, Decodable };
+
+use fs2::FileExt;
 
 /// The maximum number of retries the cab will make
 const MAX_RETRIES:i32 = 10;
@@ -116,20 +118,22 @@ pub enum KVError {
     CouldntEncode,
     /// Could not write to the cab on disk
     CouldntWrite,
-    /// Could not set the access permissions for the cab
-    CouldntSetPermissions,
-    /// Could get the permissions that the cab has on disk
-    CoudlntGetPermissions,
     /// Failed to read the cab from disk
     FailedToRead,
-    /// Could not sync the metadata with the disk
-    CouldntSyncMetadata,
     /// Could not flush the data to disk
     CouldntFlush,
     /// Could not open the file from disk
     CouldntOpen,
     /// Could not load the file from disk
     CouldntLoad,
+    /// Failed to write lock the cab
+    CouldntWriteLock,
+    /// Failed to read lock the cab
+    CouldntReadLock,
+    /// Failed to unlock the cab
+    CouldntUnlock,
+    /// Failed to set SeekFrom::Start
+    CouldntSeekToStart,
 }
 
 /// The type that represents the key-value store
@@ -147,11 +151,6 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             file: KV::<K, V>::retry_get_file(p).unwrap(),
         };
 
-        // lock the cab for writes
-        if let Err(e) = store.lock_cab(true) {
-            return Err(e);
-        }
-
         match store.load_from_persist() {
             Ok(f) => trace!("{}", f),
             Err(e) => {
@@ -165,31 +164,6 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         Ok(store)
     }
 
-    /// Sets file permission for a path to not be readonly
-    fn set_path_permission(p: &'static str) -> KVResult {
-        match fs::metadata(p) {
-            Ok(f) => {
-                let mut perms = f.permissions();
-                perms.set_readonly(false);
-
-                match fs::set_permissions(p, perms) {
-                    Ok(_) => return Ok(true),
-                    Err(e) => {
-                        error!("{}", e);
-                        return Err(KVError::CouldntSetPermissions);
-                    }
-                }
-            },
-            Err(e) => {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    error!("{}", e);
-                    return Err(KVError::CoudlntGetPermissions);
-                }
-                return Ok(true);
-            },
-        }
-    }
-
     /// Retry to get a reference to the cab file at path p and create if doesn't exist
     fn retry_get_file(p:&'static str) -> Result<File, KVError> {
         retry!(i, {
@@ -198,14 +172,9 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Err(e) => {
                     error!("{}", e);
                     last_retry!(i, return Err(KVError::CouldntOpen));
-
-                    if let Err(e) = KV::<K, V>::set_path_permission(p) {
-                        last_retry!(i, return Err(e));
-                    }
                     continue;
                 }
             };
-
         });
 
         Err(KVError::CouldntOpen)
@@ -256,72 +225,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         }
         // create a vec from the cabs keys
         Ok(self.cab.keys().map(|k| k.clone()).collect())
-    }
-
-    /// Locks/unlocks cab for writing purposes
-    fn lock_cab(&mut self, readonly:bool) -> KVResult {
-        retry!(i, {
-            // sync the metadata before doing anything
-            if let Err(e) = self.file.sync_all() {
-                error!("{}", e);
-                return Err(KVError::CouldntSyncMetadata);
-            }
-
-            // set not readonly while writing
-            let mut perms = match self.file.metadata() {
-                Ok(f) => f.permissions(),
-                Err(e) => {
-                    error!("{}", e);
-                    last_retry!(i, return Err(KVError::CoudlntGetPermissions));
-                    continue;
-                },
-            };
-            perms.set_readonly(readonly);
-
-            match self.file.set_permissions(perms) {
-                Ok(_) => {
-                    break;
-                },
-                Err(e) => {
-                    error!("{}", e);
-                    last_retry!(i, return Err(KVError::CouldntSetPermissions));
-                    continue;
-                },
-            }
-        });
-
-        Ok(true)
-    }
-
-    /// Waits for the cab to become free
-    fn wait_for_free(&mut self, lock:bool) -> KVResult {
-        loop {
-            // check if the cab is being written to
-            if let Err(e) = self.file.sync_all() {
-                error!("{}", e);
-                return Err(KVError::CouldntSyncMetadata);
-            }
-            let metadata = match self.file.metadata() {
-                Ok(m) => m,
-                Err(_) => return Err(KVError::DoesntExistOrNotReadable),
-            };
-
-            if metadata.permissions().readonly() {
-                if lock {
-                    if let Err(e) = self.lock_cab(false) {
-                        return Err(e);
-                    }
-                }
-                // make sure it reads from start
-                if let Err(_) = self.file.seek(SeekFrom::Start(0)) {
-                    return Err(KVError::FailedToRead);
-                }
-                break;
-            }
-        }
-
-        Ok(true)
-    }
+    } 
 
     /// Writes the key-value Store to file
     fn write_to_persist(&mut self) -> KVResult {
@@ -337,28 +241,36 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         // attempt to write to the cab
         retry!(i, {
             // check that can write to the cab
-            if let Err(e) = self.wait_for_free(true) {
-                return Err(e);
+            if let Err(e) = self.file.lock_exclusive() {
+                error!("{}", e);
+                last_retry!(i, return Err(KVError::CouldntWriteLock));
+                continue;
+            }
+            
+            // seek to the start
+            if let Err(e) = self.file.seek(SeekFrom::Start(0)) {
+                error!("{}", e);
+                last_retry!(i, return Err(KVError::CouldntSeekToStart));
+                continue;
             }
 
             // write the bytes to it
-            match self.file.write_all(byte_vec.as_slice()) {
-                Ok(_) => (),
-                Err(e) => {
-                    error!("file.write_all/retry: {}", e);
-                    last_retry!(i, return Err(KVError::CouldntWrite));
-                    continue;
-                },
+            if let Err(e) = self.file.write_all(byte_vec.as_slice()) {
+                error!("file.write_all/retry: {}", e);
+                last_retry!(i, return Err(KVError::CouldntWrite));
+                continue;
             }
 
             // flush to disk
             if let Err(e) = self.file.flush() {
                 error!("{}", e);
-                return Err(KVError::CouldntFlush);
+                last_retry!(i, return Err(KVError::CouldntFlush));
+                continue;
             }
-            if let Err(e) = self.lock_cab(true) {
-                error!("{:?}", e);
-                last_retry!(i, return Err(e));
+            if let Err(e) = self.file.unlock() {
+                error!("{}", e);
+                last_retry!(i, return Err(KVError::CouldntUnlock));
+                continue;
             }
             return Ok(true);
         });
@@ -373,8 +285,16 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             let mut byte_vec = Vec::new();
 
             // wait/lock the cab and read the bytes
-            if let Err(e) = self.wait_for_free(false) {
-                return Err(e);
+            if let Err(e) = self.file.lock_shared() {
+                error!("{}", e);
+                return Err(KVError::CouldntReadLock);
+            }
+
+            // seek to the start
+            if let Err(e) = self.file.seek(SeekFrom::Start(0)) {
+                error!("{}", e);
+                last_retry!(i, return Err(KVError::CouldntSeekToStart));
+                continue;
             }
 
             // read the file into the buffer
@@ -382,6 +302,10 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Ok(count) => {
                     // don't attempt to decode as empty
                     if count == 0 {
+                        if let Err(e) = self.file.unlock() {
+                            error!("{}", e);
+                            last_retry!(i, return Err(KVError::CouldntUnlock));
+                        }
                         return Ok(true);
                     }
                 },
@@ -396,6 +320,10 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Ok(f) => {
                     // assign read HashMap back to self
                     self.cab = f;
+                    if let Err(e) = self.file.unlock() {
+                        error!("{}", e);
+                        last_retry!(i, return Err(KVError::CouldntUnlock));
+                    }
                     return Ok(true);
                 },
                 Err(e) => {

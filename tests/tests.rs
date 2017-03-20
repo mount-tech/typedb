@@ -275,7 +275,6 @@ fn test_multithread_many_instance_insert() {
         let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 0..1000 {
             assert_eq!(test_store.insert(i, Value::Int(i)), Ok(true));
-            assert!(test_store.get(i).unwrap().is_some());
         }
     });
 
@@ -283,7 +282,6 @@ fn test_multithread_many_instance_insert() {
         let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 0..1000 {
             assert_eq!(test_store.insert(i, Value::Int(i)), Ok(true));
-            assert!(test_store.get(i).unwrap().is_some());
         }
     });
 
@@ -291,7 +289,6 @@ fn test_multithread_many_instance_insert() {
         let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 1000..2000 {
             assert_eq!(test_store.insert(i, Value::Int(i)), Ok(true));
-            assert!(test_store.get(i).unwrap().is_some());
         }
     });
 
@@ -299,7 +296,6 @@ fn test_multithread_many_instance_insert() {
         let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 1000..2000 {
             assert_eq!(test_store.insert(i, Value::Int(i)), Ok(true));
-            assert!(test_store.get(i).unwrap().is_some());
         }
     });
 
@@ -307,6 +303,10 @@ fn test_multithread_many_instance_insert() {
     assert!(t_2.join().is_ok());
     assert!(t_3.join().is_ok());
     assert!(t_4.join().is_ok());
+
+    let mut sorted_keys = check_store.keys().unwrap();
+    sorted_keys.sort();
+    println!("key_count:{}\nkeys:{:?}", sorted_keys.len(), sorted_keys);
 
     for i in 0..2000 {
         assert_eq!(check_store.get(i).unwrap(), Some(Value::Int(i)));

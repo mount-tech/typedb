@@ -4,6 +4,7 @@ kv_cab
 [![crates.io version](https://img.shields.io/crates/v/kv_cab.svg)](https://crates.io/crates/kv_cab)
 
 Simple persistent generic HashMap/Key-value store.
+**THIS IS NOT FIT FOR USE YET!**
 
 [Documentation](https://docs.rs/kv_cab)
 
