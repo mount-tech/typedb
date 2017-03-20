@@ -382,16 +382,23 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             },
         }
 
-        // decode u8 vec back into HashMap
-        let decoded: HashMap<K, V> = match decode(byte_vec.as_slice()) {
-            Ok(f) => f,
-            Err(e) => {
-                error!("{}", e);
-                return Err(KVError::CouldntDecode);
-            },
-        };
-        // assign read HashMap back to self
-        self.cab = decoded;
+        retry!(i, {
+            // decode u8 vec back into HashMap
+            match decode(byte_vec.as_slice()) {
+                Ok(f) => {
+                    // assign read HashMap back to self
+                    self.cab = f;
+                    break;
+                },
+                Err(e) => {
+                    error!("{}", e);
+                    if i >= MAX_RETRIES - 1 {
+                        return Err(KVError::CouldntDecode);
+                    }
+                    continue;
+                },
+            };
+        });
 
         Ok(true)
     }
