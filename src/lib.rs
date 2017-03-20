@@ -58,6 +58,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::{ File, OpenOptions };
 use std::io::prelude::*;
+use std::io::SeekFrom;
 use std::hash::Hash;
 
 use bincode::SizeLimit;
@@ -118,6 +119,8 @@ pub enum KVError {
     CouldntFlush,
     /// Could not open the file from disk
     CouldntOpen,
+    /// Could not load the file from disk
+    CouldntLoad,
 }
 
 /// The type that represents the key-value store
@@ -306,6 +309,10 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                         return Err(e);
                     }
                 }
+                // make sure it reads from start
+                if let Err(_) = self.file.seek(SeekFrom::Start(0)) {
+                    return Err(KVError::FailedToRead);
+                }
                 break;
             }
         }
@@ -360,35 +367,35 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
     /// Loads key-value store from file
     fn load_from_persist(&mut self) -> KVResult {
-        // byte vec to read into
-        let mut byte_vec = Vec::new();
-
-        // wait/lock the cab and read the bytes
-        if !self.wait_for_free(false).is_ok() {
-            return Err(KVError::DoesntExistOrNotReadable);
-        }
-
-        // read the file into the buffer
-        match self.file.read_to_end(&mut byte_vec) {
-            Ok(count) => {
-                if count == 0 {
-                    // don't attempt to decode as empty
-                    return Ok(true);
-                }
-            },
-            Err(e) => {
-                error!("{}", e);
-                return Err(KVError::FailedToRead);
-            },
-        }
-
         retry!(i, {
+            // byte vec to read into
+            let mut byte_vec = Vec::new();
+
+            // wait/lock the cab and read the bytes
+            if !self.wait_for_free(false).is_ok() {
+                return Err(KVError::DoesntExistOrNotReadable);
+            }
+
+            // read the file into the buffer
+            match self.file.read_to_end(&mut byte_vec) {
+                Ok(count) => {
+                    if count == 0 {
+                        // don't attempt to decode as empty
+                        return Ok(true);
+                    }
+                },
+                Err(e) => {
+                    error!("{}", e);
+                    return Err(KVError::FailedToRead);
+                },
+            }
+
             // decode u8 vec back into HashMap
             match decode(byte_vec.as_slice()) {
                 Ok(f) => {
                     // assign read HashMap back to self
                     self.cab = f;
-                    break;
+                    return Ok(true);
                 },
                 Err(e) => {
                     error!("{}", e);
@@ -399,7 +406,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 },
             };
         });
-
-        Ok(true)
+        
+        Err(KVError::CouldntLoad)
     }
 }
