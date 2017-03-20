@@ -108,12 +108,8 @@ type KVResult = Result<bool, KVError>;
 /// Errors that KV might have
 #[derive(Debug, PartialEq)]
 pub enum KVError {
-    /// Cab did not contain anything on disk
-    CabEmpty,
     /// Could not decode the cab from disk
     CouldntDecode,
-    /// Cab was either not readable from disk or doesn't exist
-    DoesntExistOrNotReadable,
     /// Couldn't encode the hashmap for writing to disk
     CouldntEncode,
     /// Could not write to the cab on disk
@@ -154,10 +150,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         match store.load_from_persist() {
             Ok(f) => trace!("{}", f),
             Err(e) => {
-                if e != KVError::CabEmpty {
-                    return Err(e);
-                }
-                warn!("{:?}", e);
+                return Err(e);
             },
         };
 
