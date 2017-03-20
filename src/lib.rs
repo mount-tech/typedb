@@ -82,6 +82,15 @@ macro_rules! retry {
     )
 }
 
+/// Macro for what to do on last retry
+macro_rules! last_retry {
+    ($i:ident, $b:stmt) => (
+        if $i >= MAX_RETRIES - 1 {
+            $b;
+        }
+    )
+}
+
 /// A default value type to use with KV
 #[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Debug)]
 pub enum Value {
@@ -188,14 +197,10 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Ok(f) => { return Ok(f); },
                 Err(e) => {
                     error!("{}", e);
-                    if i >= MAX_RETRIES - 1 {
-                        return Err(KVError::CouldntOpen);
-                    }
+                    last_retry!(i, return Err(KVError::CouldntOpen));
 
                     if let Err(e) = KV::<K, V>::set_path_permission(p) {
-                        if i >= MAX_RETRIES - 1 {
-                            return Err(e);
-                        }
+                        last_retry!(i, return Err(e));
                     }
                     continue;
                 }
@@ -256,14 +261,18 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     /// Locks/unlocks cab for writing purposes
     fn lock_cab(&mut self, readonly:bool) -> KVResult {
         retry!(i, {
+            // sync the metadata before doing anything
+            if let Err(e) = self.file.sync_all() {
+                error!("{}", e);
+                return Err(KVError::CouldntSyncMetadata);
+            }
+
             // set not readonly while writing
             let mut perms = match self.file.metadata() {
                 Ok(f) => f.permissions(),
                 Err(e) => {
                     error!("{}", e);
-                    if i >= MAX_RETRIES - 1 {
-                        return Err(KVError::CoudlntGetPermissions);
-                    }
+                    last_retry!(i, return Err(KVError::CoudlntGetPermissions));
                     continue;
                 },
             };
@@ -271,17 +280,11 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
             match self.file.set_permissions(perms) {
                 Ok(_) => {
-                    if let Err(e) = self.file.sync_all() {
-                        error!("{}", e);
-                        return Err(KVError::CouldntSyncMetadata);
-                    }
                     break;
                 },
                 Err(e) => {
                     error!("{}", e);
-                    if i >= MAX_RETRIES - 1 {
-                        return Err(KVError::CouldntSetPermissions);
-                    }
+                    last_retry!(i, return Err(KVError::CouldntSetPermissions));
                     continue;
                 },
             }
@@ -331,19 +334,19 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             },
         };
 
-        if !self.wait_for_free(true).is_ok() {
-            return Err(KVError::DoesntExistOrNotReadable);
-        }
         // attempt to write to the cab
         retry!(i, {
+            // check that can write to the cab
+            if !self.wait_for_free(true).is_ok() {
+                return Err(KVError::DoesntExistOrNotReadable);
+            }
+
             // write the bytes to it
             match self.file.write_all(byte_vec.as_slice()) {
                 Ok(_) => (),
                 Err(e) => {
                     error!("file.write_all/retry: {}", e);
-                    if i >= MAX_RETRIES - 1 {
-                        return Err(KVError::CouldntWrite);
-                    }
+                    last_retry!(i, return Err(KVError::CouldntWrite));
                     continue;
                 },
             }
@@ -355,9 +358,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             }
             if let Err(e) = self.lock_cab(true) {
                 error!("{:?}", e);
-                if i >= MAX_RETRIES - 1 {
-                    return Err(e);
-                }
+                last_retry!(i, return Err(e));
             }
             return Ok(true);
         });
@@ -399,9 +400,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 },
                 Err(e) => {
                     error!("{}", e);
-                    if i >= MAX_RETRIES - 1 {
-                        return Err(KVError::CouldntDecode);
-                    }
+                    last_retry!(i, return Err(KVError::CouldntDecode));
                     continue;
                 },
             };
