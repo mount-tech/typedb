@@ -147,7 +147,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             file: KV::<K, V>::retry_get_file(p).unwrap(),
         };
 
-        match store.load_from_persist() {
+        match store.load_from_persist(false) {
             Ok(f) => trace!("{}", f),
             Err(e) => {
                 return Err(e);
@@ -175,8 +175,13 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
     /// Inserta a key, value pair into the key-value store
     pub fn insert(&mut self, key: K, value: V) -> KVResult {
+        // check that can write to the cab
+        if let Err(e) = self.file.lock_exclusive() {
+            error!("{}", e);
+            return Err(KVError::CouldntWriteLock);
+        }
         // make sure mem version up to date
-        if let Err(e) = self.load_from_persist() {
+        if let Err(e) = self.load_from_persist(true) {
             return Err(e);
         }
         // insert into the HashMap
@@ -188,7 +193,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     /// Get the value from a key
     pub fn get(&mut self, key: K) -> Result<Option<V>, KVError> {
         // make sure mem version up to date
-        if let Err(e) = self.load_from_persist() {
+        if let Err(e) = self.load_from_persist(false) {
             return Err(e);
         }
         // get the value from the cab
@@ -200,8 +205,13 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
 
     /// Removes a key and associated value from the key-value Store
     pub fn remove(&mut self, key: K) -> KVResult {
+        // check that can write to the cab
+        if let Err(e) = self.file.lock_exclusive() {
+            error!("{}", e);
+            return Err(KVError::CouldntWriteLock);
+        }
         // make sure mem version up to date
-        if let Err(e) = self.load_from_persist() {
+        if let Err(e) = self.load_from_persist(true) {
             return Err(e);
         }
         // remove from the HashMap
@@ -213,24 +223,15 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     /// get all the keys contained in the KV Store
     pub fn keys(&mut self) -> Result<Vec<K>, KVError> {
         // make sure mem version up to date
-        if let Err(e) = self.load_from_persist() {
+        if let Err(e) = self.load_from_persist(false) {
             return Err(e);
         }
         // create a vec from the cabs keys
         Ok(self.cab.keys().map(|k| k.clone()).collect())
-    } 
+    }
 
     /// Writes the key-value Store to file
     fn write_to_persist(&mut self) -> KVResult {
-        // encode the cab as a u8 vec
-        let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
-            Ok(bv) => bv,
-            Err(e) => {
-                error!("encode: {}", e);
-                return Err(KVError::CouldntEncode);
-            },
-        };
-
         // attempt to write to the cab
         retry!(i, {
             // check that can write to the cab
@@ -239,7 +240,16 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 last_retry!(i, return Err(KVError::CouldntWriteLock));
                 continue;
             }
-            
+
+            // encode the cab as a u8 vec
+            let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
+                Ok(bv) => bv,
+                Err(e) => {
+                    error!("encode: {}", e);
+                    return Err(KVError::CouldntEncode);
+                },
+            };
+
             // seek to the start
             if let Err(e) = self.file.seek(SeekFrom::Start(0)) {
                 error!("{}", e);
@@ -260,6 +270,8 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 last_retry!(i, return Err(KVError::CouldntFlush));
                 continue;
             }
+
+            // unlock the file after write has completed
             if let Err(e) = self.file.unlock() {
                 error!("{}", e);
                 last_retry!(i, return Err(KVError::CouldntUnlock));
@@ -272,15 +284,17 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
     }
 
     /// Loads key-value store from file
-    fn load_from_persist(&mut self) -> KVResult {
+    fn load_from_persist(&mut self, already_locked:bool) -> KVResult {
         retry!(i, {
             // byte vec to read into
             let mut byte_vec = Vec::new();
 
             // wait/lock the cab and read the bytes
-            if let Err(e) = self.file.lock_shared() {
-                error!("{}", e);
-                return Err(KVError::CouldntReadLock);
+            if !already_locked {
+                if let Err(e) = self.file.lock_shared() {
+                    error!("{}", e);
+                    return Err(KVError::CouldntReadLock);
+                }
             }
 
             // seek to the start
@@ -295,9 +309,11 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Ok(count) => {
                     // don't attempt to decode as empty
                     if count == 0 {
-                        if let Err(e) = self.file.unlock() {
-                            error!("{}", e);
-                            last_retry!(i, return Err(KVError::CouldntUnlock));
+                        if !already_locked {
+                            if let Err(e) = self.file.unlock() {
+                                error!("{}", e);
+                                last_retry!(i, return Err(KVError::CouldntUnlock));
+                            }
                         }
                         return Ok(true);
                     }
@@ -313,9 +329,11 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 Ok(f) => {
                     // assign read HashMap back to self
                     self.cab = f;
-                    if let Err(e) = self.file.unlock() {
-                        error!("{}", e);
-                        last_retry!(i, return Err(KVError::CouldntUnlock));
+                    if !already_locked {
+                        if let Err(e) = self.file.unlock() {
+                            error!("{}", e);
+                            last_retry!(i, return Err(KVError::CouldntUnlock));
+                        }
                     }
                     return Ok(true);
                 },
@@ -326,7 +344,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 },
             };
         });
-        
+
         Err(KVError::CouldntLoad)
     }
 }
