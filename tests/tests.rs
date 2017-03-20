@@ -21,8 +21,8 @@ macro_rules! test_teardown {
 #[test]
 fn test_create() {
     let test_cab_path ="./test_create.cab";
-
     let _ = std::fs::remove_file(test_cab_path);
+
     assert!(KV::<String, Value>::new(test_cab_path).is_ok());
 
     test_teardown!(test_cab_path);
@@ -31,7 +31,6 @@ fn test_create() {
 #[test]
 fn test_create_wrong_type() {
     let test_cab_path ="./test_create_wrong_type.cab";
-
     let _ = std::fs::remove_file(test_cab_path);
 
     let mut test_store = KV::<String, Value>::new(test_cab_path).unwrap();
@@ -201,6 +200,8 @@ fn test_kv_all() {
 #[test]
 fn test_multi_instance() {
     let test_cab_path = "./test_multi_instance.cab";
+    let _ = std::fs::remove_file(test_cab_path);
+
     {
         let mut test_store = KV::<String, Value>::new(test_cab_path).unwrap();
         assert_eq!(test_store.insert("key".to_string(), Value::String("value".to_string())), Ok(true));
@@ -217,6 +218,7 @@ fn test_multi_instance() {
 #[test]
 fn test_multithread_instance() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance.cab";
+    let _ = std::fs::remove_file(TEST_CAB_PATH);
 
     let t_1 = thread::spawn(|| {
         let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
@@ -239,20 +241,21 @@ fn test_multithread_instance() {
 #[test]
 fn test_multithread_instance_insert() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance_insert.cab";
+    let _ = std::fs::remove_file(TEST_CAB_PATH);
 
     let t_1 = thread::spawn(|| {
-        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
+        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 0..1000 {
-            assert_eq!(test_store.insert(format!("{}", i), Value::Int(i)), Ok(true));
-            assert!(test_store.get(format!("{}", i)).unwrap().is_some());
+            assert_eq!(test_store.insert(i, Value::Int(i)), Ok(true));
+            assert!(test_store.get(i).unwrap().is_some());
         }
     });
 
     let t_2 = thread::spawn(|| {
-        let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
+        let mut test_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
         for i in 1000..2000 {
-            assert_eq!(test_store.insert(format!("{}", i), Value::Int(i)), Ok(true));
-            assert!(test_store.get(format!("{}", i)).unwrap().is_some());
+            assert_eq!(test_store.insert(i, Value::Int(i)), Ok(true));
+            assert!(test_store.get(i).unwrap().is_some());
         }
     });
 
@@ -265,6 +268,7 @@ fn test_multithread_instance_insert() {
 #[test]
 fn test_multithread_many_instance_insert() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_many_instance_insert.cab";
+    let _ = std::fs::remove_file(TEST_CAB_PATH);
     let mut check_store = KV::<i32, Value>::new(TEST_CAB_PATH).unwrap();
 
     let t_1 = thread::spawn(|| {
@@ -314,6 +318,7 @@ fn test_multithread_many_instance_insert() {
 #[test]
 fn test_multithread_instance_read_between() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance_read_between.cab";
+    let _ = std::fs::remove_file(TEST_CAB_PATH);
 
     let t_1 = thread::spawn(|| {
         let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();

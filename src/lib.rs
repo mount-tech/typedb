@@ -337,8 +337,8 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
         // attempt to write to the cab
         retry!(i, {
             // check that can write to the cab
-            if !self.wait_for_free(true).is_ok() {
-                return Err(KVError::DoesntExistOrNotReadable);
+            if let Err(e) = self.wait_for_free(true) {
+                return Err(e);
             }
 
             // write the bytes to it
@@ -373,15 +373,15 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             let mut byte_vec = Vec::new();
 
             // wait/lock the cab and read the bytes
-            if !self.wait_for_free(false).is_ok() {
-                return Err(KVError::DoesntExistOrNotReadable);
+            if let Err(e) = self.wait_for_free(false) {
+                return Err(e);
             }
 
             // read the file into the buffer
             match self.file.read_to_end(&mut byte_vec) {
                 Ok(count) => {
+                    // don't attempt to decode as empty
                     if count == 0 {
-                        // don't attempt to decode as empty
                         return Ok(true);
                     }
                 },
