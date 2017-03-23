@@ -48,6 +48,7 @@ fn main() {
 
 */
 
+#![deny(missing_docs)]
 
 extern crate bincode;
 extern crate rustc_serialize;
@@ -96,9 +97,13 @@ macro_rules! last_retry {
 /// A default value type to use with KV
 #[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Debug)]
 pub enum Value {
+    /// Cab type for strings
     String(String),
+    /// Cab type for intergers
     Int(i32),
+    /// Cab type for floats
     Float(f32),
+    /// Cab type for a sub map
     Map(HashMap<String, Value>),
 }
 
