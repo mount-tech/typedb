@@ -97,14 +97,16 @@ macro_rules! last_retry {
 /// A default value type to use with KV
 #[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Debug)]
 pub enum Value {
-    /// Cab type for strings
+    /// Cab default Value type for strings
     String(String),
-    /// Cab type for intergers
+    /// Cab default Value type for intergers
     Int(i32),
-    /// Cab type for floats
+    /// Cab default Value type for floats
     Float(f32),
-    /// Cab type for a sub map
+    /// Cab default Value type for a sub map
     Map(HashMap<String, Value>),
+    /// Cab default Value type for list
+    List(Vec<Value>),
 }
 
 /// Type alias for results from KV
