@@ -3,8 +3,9 @@ kv_cab
 
 [![crates.io version](https://img.shields.io/crates/v/kv_cab.svg)](https://crates.io/crates/kv_cab)
 
-Simple persistent generic HashMap/Key-value store.
-**THIS IS NOT FIT FOR USE YET!**
+Simple persistent generic HashMap/Key-value store, using file locking to limit writing between threads.
+
+This is in a beta state at the moment.
 
 [Documentation](https://docs.rs/kv_cab)
 
