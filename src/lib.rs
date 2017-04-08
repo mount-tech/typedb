@@ -1,5 +1,7 @@
 /*!
-Simple persistent generic HashMap/Key-value store.
+Simple persistent generic HashMap/Key-value store, using file locking to limit writing between threads.
+
+This is in a beta state at the moment.
 
 Basic usage:
 
