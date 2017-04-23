@@ -1,15 +1,17 @@
 extern crate kv_cab;
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 
 use kv_cab::KV;
 
-#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 enum MyKey {
     String(String),
     Int(i32),
 }
 
-#[derive(Clone, RustcEncodable, RustcDecodable, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 enum MyValue {
     String(String),
     Int(i32),

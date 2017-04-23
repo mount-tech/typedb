@@ -23,17 +23,19 @@ Usage with user defined Key and Value types:
 
 ```
 extern crate kv_cab;
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 
 use kv_cab::KV;
 
-#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 enum MyKey {
     String(String),
     Int(i32),
 }
 
-#[derive(Clone, RustcEncodable, RustcDecodable, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 enum MyValue {
     String(String),
     Int(i32),
@@ -53,7 +55,9 @@ fn main() {
 #![deny(missing_docs)]
 
 extern crate bincode;
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 #[macro_use]
 extern crate log;
 extern crate fs2;
@@ -64,10 +68,11 @@ use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::hash::Hash;
 
-use bincode::SizeLimit;
-use bincode::rustc_serialize::{ encode, decode };
 
-use rustc_serialize::{ Encodable, Decodable };
+use bincode::{serialize, deserialize, Infinite};
+use serde::ser::Serialize;
+use serde::de::Deserialize;
+
 
 use fs2::FileExt;
 
@@ -97,7 +102,7 @@ macro_rules! last_retry {
 }
 
 /// A default value type to use with KV
-#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub enum Value {
     /// Cab default Value type for strings
     String(String),
@@ -117,9 +122,9 @@ type KVResult = Result<bool, KVError>;
 /// Errors that KV might have
 #[derive(Debug, PartialEq)]
 pub enum KVError {
-    /// Could not decode the cab from disk
+    /// Could not deserialize the cab from disk
     CouldntDecode,
-    /// Couldn't encode the hashmap for writing to disk
+    /// Couldn't serialize the hashmap for writing to disk
     CouldntEncode,
     /// Could not write to the cab on disk
     CouldntWrite,
@@ -147,7 +152,7 @@ pub struct KV<K,V> {
     file: File,
 }
 
-impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decodable> KV<K,V> {
+impl<K: Clone + Serialize + Deserialize + Eq + Hash, V: Clone + Serialize + Deserialize> KV<K,V> {
     /// Creates a new instance of the KV store
     pub fn new(p:&'static str) -> Result<KV<K,V>, KVError> {
         // create the KV instance
@@ -250,11 +255,11 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 continue;
             }
 
-            // encode the cab as a u8 vec
-            let byte_vec: Vec<u8> = match encode(&mut self.cab, SizeLimit::Infinite) {
+            // serialize the cab as a u8 vec
+            let byte_vec: Vec<u8> = match serialize(&mut self.cab, Infinite) {
                 Ok(bv) => bv,
                 Err(e) => {
-                    error!("encode: {}", e);
+                    error!("serialize: {}", e);
                     return Err(KVError::CouldntEncode);
                 },
             };
@@ -316,7 +321,7 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
             // read the file into the buffer
             match self.file.read_to_end(&mut byte_vec) {
                 Ok(count) => {
-                    // don't attempt to decode as empty
+                    // don't attempt to deserialize as empty
                     if count == 0 {
                         if !already_locked {
                             if let Err(e) = self.file.unlock() {
@@ -333,8 +338,8 @@ impl<K: Clone + Encodable + Decodable + Eq + Hash, V: Clone + Encodable + Decoda
                 },
             }
 
-            // decode u8 vec back into HashMap
-            match decode(byte_vec.as_slice()) {
+            // deserialize u8 vec back into HashMap
+            match deserialize(byte_vec.as_slice()) {
                 Ok(f) => {
                     // assign read HashMap back to self
                     self.cab = f;
