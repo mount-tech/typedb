@@ -27,24 +27,26 @@ fn main() {
 Usage with user defined Key and Value types:
 ```rust
 extern crate kv_cab;
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 
 use kv_cab::KV;
 
-#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 enum MyKey {
     String(String),
     Int(i32),
 }
 
-#[derive(Clone, RustcEncodable, RustcDecodable, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 enum MyValue {
     String(String),
     Int(i32),
 }
 
 fn main() {
-    let mut test_store = KV::<MyKey, MyValue>::new("./db.cab");
+    let mut test_store = KV::<MyKey, MyValue>::new("./db.cab").unwrap();
 
     let _ = test_store.insert(MyKey::Int(1i32), MyValue::String("value".to_string()));
     println!("{:?}", test_store.get(MyKey::Int(1i32)));
