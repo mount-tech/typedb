@@ -6,9 +6,9 @@ This is in a beta state at the moment.
 Basic usage:
 
 ```
-extern crate kv_cab;
+extern crate typedb;
 
-use kv_cab::{ KV, Value };
+use typedb::{ KV, Value };
 
 fn main() {
     let mut test_store = KV::<String, Value>::new("./db.cab").unwrap();
@@ -22,12 +22,12 @@ fn main() {
 Usage with user defined Key and Value types:
 
 ```
-extern crate kv_cab;
+extern crate typedb;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-use kv_cab::KV;
+use typedb::KV;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 enum MyKey {

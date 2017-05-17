@@ -1,10 +1,9 @@
-
 #![feature(test)]
 
 extern crate test;
-extern crate kv_cab;
+extern crate typedb;
 
-use kv_cab::{ KV, Value };
+use typedb::{ KV, Value };
 
 #[cfg(test)]
 mod benches {

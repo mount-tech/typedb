@@ -1,12 +1,12 @@
 [package]
-name = "kv_cab"
+name = "typedb"
 version = "0.6.0"
 authors = ["shockham <samuel.hockham@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/shockham/kv_cab"
-homepage = "https://github.com/shockham/kv_cab"
-documentation = "https://docs.rs/kv_cab"
+repository = "https://github.com/shockham/typedb"
+homepage = "https://github.com/shockham/typedb"
+documentation = "https://docs.rs/typedb"
 description = "Simple persistent generic HashMap/Key-value store"
 
 [dependencies]

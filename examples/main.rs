@@ -1,6 +1,6 @@
-extern crate kv_cab;
+extern crate typedb;
 
-use kv_cab::{ KV, Value };
+use typedb::{ KV, Value };
 
 fn main() {
     let cab_path = "./db.cab";

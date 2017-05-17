@@ -1,9 +1,9 @@
-extern crate kv_cab;
+extern crate typedb;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-use kv_cab::KV;
+use typedb::KV;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 enum MyKey {

@@ -1,19 +1,19 @@
-kv_cab
+typedb
 ========
 
-[![crates.io version](https://img.shields.io/crates/v/kv_cab.svg)](https://crates.io/crates/kv_cab)
+[![crates.io version](https://img.shields.io/crates/v/typedb.svg)](https://crates.io/crates/typedb)
 
 Simple persistent generic HashMap/Key-value store, using file locking to limit writing between threads.
 
 This is in a beta state at the moment.
 
-[Documentation](https://docs.rs/kv_cab)
+[Documentation](https://docs.rs/typedb)
 
 Basic usage:
 ```rust
-extern crate kv_cab;
+extern crate typedb;
 
-use kv_cab::{ KV, Value };
+use typedb::{ KV, Value };
 
 fn main() {
     let mut test_store = KV::<String, Value>::new("./db.cab");
@@ -26,12 +26,12 @@ fn main() {
 
 Usage with user defined Key and Value types:
 ```rust
-extern crate kv_cab;
+extern crate typedb;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-use kv_cab::KV;
+use typedb::KV;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 enum MyKey {
