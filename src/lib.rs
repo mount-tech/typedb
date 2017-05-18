@@ -62,6 +62,9 @@ extern crate serde_derive;
 extern crate log;
 extern crate fs2;
 
+/// Macros for simplifying custom key and value types definition
+pub mod macros;
+
 use std::collections::HashMap;
 use std::fs::{ File, OpenOptions };
 use std::io::prelude::*;
