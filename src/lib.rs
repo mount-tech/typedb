@@ -22,24 +22,22 @@ fn main() {
 Usage with user defined Key and Value types:
 
 ```
+#[macro_use]
 extern crate typedb;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
 use typedb::KV;
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-enum MyKey {
+key!(MyKey:
     String(String),
     Int(i32),
-}
+);
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-enum MyValue {
+value!(MyValue:
     String(String),
     Int(i32),
-}
+);
 
 fn main() {
     let mut test_store = KV::<MyKey, MyValue>::new("./db.cab").unwrap();
