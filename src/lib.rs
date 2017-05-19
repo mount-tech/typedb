@@ -196,9 +196,7 @@ impl<K: Clone + Serialize + Deserialize + Eq + Hash, V: Clone + Serialize + Dese
             return Err(KVError::CouldntWriteLock);
         }
         // make sure mem version up to date
-        if let Err(e) = self.load_from_persist(true) {
-            return Err(e);
-        }
+        self.load_from_persist(true)?;
         // insert into the HashMap
         self.cab.insert(key, value);
         // persist
@@ -208,9 +206,7 @@ impl<K: Clone + Serialize + Deserialize + Eq + Hash, V: Clone + Serialize + Dese
     /// Get the value from a key
     pub fn get(&mut self, key: K) -> Result<Option<V>, KVError> {
         // make sure mem version up to date
-        if let Err(e) = self.load_from_persist(false) {
-            return Err(e);
-        }
+        self.load_from_persist(false)?;
         // get the value from the cab
         match self.cab.get(&key) {
             Some(v) => Ok(Some((*v).clone())),
@@ -226,9 +222,7 @@ impl<K: Clone + Serialize + Deserialize + Eq + Hash, V: Clone + Serialize + Dese
             return Err(KVError::CouldntWriteLock);
         }
         // make sure mem version up to date
-        if let Err(e) = self.load_from_persist(true) {
-            return Err(e);
-        }
+        self.load_from_persist(true)?;
         // remove from the HashMap
         self.cab.remove(&key);
         // persist
@@ -238,9 +232,7 @@ impl<K: Clone + Serialize + Deserialize + Eq + Hash, V: Clone + Serialize + Dese
     /// get all the keys contained in the KV Store
     pub fn keys(&mut self) -> Result<Vec<K>, KVError> {
         // make sure mem version up to date
-        if let Err(e) = self.load_from_persist(false) {
-            return Err(e);
-        }
+        self.load_from_persist(false)?;
         // create a vec from the cabs keys
         Ok(self.cab.keys().map(|k| k.clone()).collect())
     }
