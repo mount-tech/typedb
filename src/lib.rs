@@ -130,7 +130,7 @@ pub enum KVError {
     /// Could not write to the cab on disk
     CouldntWrite,
     /// Failed to read the cab from disk
-    FailedToRead,
+    CouldntRead,
     /// Could not flush the data to disk
     CouldntFlush,
     /// Could not open the file from disk
@@ -327,7 +327,7 @@ impl<K: Clone + Serialize + Deserialize + Eq + Hash, V: Clone + Serialize + Dese
                 },
                 Err(e) => {
                     error!("{}", e);
-                    return Err(KVError::FailedToRead);
+                    return Err(KVError::CouldntRead);
                 },
             }
 
