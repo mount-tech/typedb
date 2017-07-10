@@ -153,7 +153,8 @@ pub struct KV<K,V> {
     file: File,
 }
 
-impl<K: Clone + Serialize + Deserialize + Eq + Hash, V: Clone + Serialize + Deserialize> KV<K,V> {
+impl<K,V> KV<K,V> where K: Clone + Serialize + for<'kde> Deserialize<'kde> + Eq + Hash,
+                  V: Clone + Serialize + for<'vde> Deserialize<'vde> {
     /// Creates a new instance of the KV store
     pub fn new(p:&'static str) -> Result<KV<K,V>, KVError> {
         // create the KV instance
