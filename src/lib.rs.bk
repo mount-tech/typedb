@@ -1,6 +1,5 @@
 /*!
-Simple persistent generic HashMap/Key-value store, using file locking to limit
-writing between threads.
+Simple persistent generic HashMap/Key-value store, using file locking to limit writing between threads.
 
 This is in a beta state at the moment.
 
@@ -65,7 +64,7 @@ extern crate fs2;
 pub mod macros;
 
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
+use std::fs::{ File, OpenOptions };
 use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::hash::Hash;
@@ -79,7 +78,7 @@ use serde::de::Deserialize;
 use fs2::FileExt;
 
 /// The maximum number of retries the cab will make
-const MAX_RETRIES: i32 = 10;
+const MAX_RETRIES:i32 = 10;
 
 /// Definition of a macro for retrying an operation
 macro_rules! retry {
@@ -149,18 +148,15 @@ pub enum KVError {
 }
 
 /// The type that represents the key-value store
-pub struct KV<K, V> {
+pub struct KV<K,V> {
     cab: HashMap<K, V>,
     file: File,
 }
 
-impl<K, V> KV<K, V>
-where
-    K: Clone + Serialize + for<'kde> Deserialize<'kde> + Eq + Hash,
-    V: Clone + Serialize + for<'vde> Deserialize<'vde>,
-{
+impl<K,V> KV<K,V> where K: Clone + Serialize + for<'kde> Deserialize<'kde> + Eq + Hash,
+                  V: Clone + Serialize + for<'vde> Deserialize<'vde> {
     /// Creates a new instance of the KV store
-    pub fn new(p: &'static str) -> Result<KV<K, V>, KVError> {
+    pub fn new(p:&'static str) -> Result<KV<K,V>, KVError> {
         // create the KV instance
         let mut store = KV {
             cab: HashMap::new(),
@@ -171,23 +167,17 @@ where
             Ok(f) => trace!("{}", f),
             Err(e) => {
                 return Err(e);
-            }
+            },
         };
 
         Ok(store)
     }
 
     /// Retry to get a reference to the cab file at path p and create if doesn't exist
-    fn retry_get_file(p: &'static str) -> Result<File, KVError> {
+    fn retry_get_file(p:&'static str) -> Result<File, KVError> {
         retry!(i, {
-            match OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .open(p) {
-                Ok(f) => {
-                    return Ok(f);
-                }
+            match OpenOptions::new().read(true).write(true).create(true).open(p) {
+                Ok(f) => { return Ok(f); },
                 Err(e) => {
                     error!("{}", e);
                     last_retry!(i, return Err(KVError::CouldntOpen));
@@ -265,7 +255,7 @@ where
                 Err(e) => {
                     error!("serialize: {}", e);
                     return Err(KVError::CouldntEncode);
-                }
+                },
             };
 
             // seek to the start
@@ -302,7 +292,7 @@ where
     }
 
     /// Loads key-value store from file
-    fn load_from_persist(&mut self, already_locked: bool) -> KVResult {
+    fn load_from_persist(&mut self, already_locked:bool) -> KVResult {
         retry!(i, {
             // byte vec to read into
             let mut byte_vec = Vec::new();
@@ -335,11 +325,11 @@ where
                         }
                         return Ok(true);
                     }
-                }
+                },
                 Err(e) => {
                     error!("{}", e);
                     return Err(KVError::CouldntRead);
-                }
+                },
             }
 
             // deserialize u8 vec back into HashMap
@@ -354,12 +344,12 @@ where
                         }
                     }
                     return Ok(true);
-                }
+                },
                 Err(e) => {
                     error!("{}", e);
                     last_retry!(i, return Err(KVError::CouldntDecode));
                     continue;
-                }
+                },
             };
         });
 

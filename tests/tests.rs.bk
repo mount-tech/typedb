@@ -1,6 +1,6 @@
 extern crate typedb;
 
-use typedb::{KV, Value};
+use typedb::{ KV, Value };
 
 macro_rules! test_setup {
     ( $p:ident, $i:ident ) => {
@@ -20,7 +20,7 @@ macro_rules! test_teardown {
 
 #[test]
 fn test_create() {
-    let test_cab_path = "./test_create.cab";
+    let test_cab_path ="./test_create.cab";
     let _ = std::fs::remove_file(test_cab_path);
 
     assert!(KV::<String, Value>::new(test_cab_path).is_ok());
@@ -30,7 +30,7 @@ fn test_create() {
 
 #[test]
 fn test_create_wrong_type() {
-    let test_cab_path = "./test_create_wrong_type.cab";
+    let test_cab_path ="./test_create_wrong_type.cab";
     let _ = std::fs::remove_file(test_cab_path);
 
     let mut test_store = KV::<String, Value>::new(test_cab_path).unwrap();
@@ -86,10 +86,7 @@ fn test_get_string() {
     }
 
     {
-        assert_eq!(
-            test_store.get("key".to_string()).unwrap(),
-            Some(Value::String("value".to_string()))
-        );
+        assert_eq!(test_store.get("key".to_string()).unwrap(), Some(Value::String("value".to_string())));
     }
 
     test_teardown!(test_cab_path);
@@ -106,10 +103,7 @@ fn test_get_int() {
     }
 
     {
-        assert_eq!(
-            test_store.get("key".to_string()).unwrap(),
-            Some(Value::Int(0i32))
-        );
+        assert_eq!(test_store.get("key".to_string()).unwrap(), Some(Value::Int(0i32)));
     }
 
     test_teardown!(test_cab_path);
@@ -126,10 +120,7 @@ fn test_get_float() {
     }
 
     {
-        assert_eq!(
-            test_store.get("key".to_string()).unwrap(),
-            Some(Value::Float(0f32))
-        );
+        assert_eq!(test_store.get("key".to_string()).unwrap(), Some(Value::Float(0f32)));
     }
 
     test_teardown!(test_cab_path);
@@ -179,14 +170,8 @@ fn test_keys() {
     let test_cab_path = "./test_keys.cab";
     test_setup!(test_cab_path, test_store);
 
-    assert_eq!(
-        test_store.insert("key".to_string(), Value::String("value".to_string())),
-        Ok(true)
-    );
-    assert_eq!(
-        test_store.insert("key2".to_string(), Value::String("value2".to_string())),
-        Ok(true)
-    );
+    assert_eq!(test_store.insert("key".to_string(), Value::String("value".to_string())), Ok(true));
+    assert_eq!(test_store.insert("key2".to_string(), Value::String("value2".to_string())), Ok(true));
 
     assert!(test_store.get("key".to_string()).unwrap().is_some());
     assert!(test_store.get("key2".to_string()).unwrap().is_some());
@@ -205,10 +190,7 @@ fn test_kv_all() {
     let test_cab_path = "./test_kv_all.cab";
     test_setup!(test_cab_path, test_store);
 
-    assert_eq!(
-        test_store.insert("key".to_string(), Value::String("value".to_string())),
-        Ok(true)
-    );
+    assert_eq!(test_store.insert("key".to_string(), Value::String("value".to_string())), Ok(true));
     assert!(test_store.get("key".to_string()).unwrap().is_some());
     assert_eq!(test_store.remove("key".to_string()), Ok(true));
 
@@ -222,17 +204,11 @@ fn test_multi_instance() {
 
     {
         let mut test_store = KV::<String, Value>::new(test_cab_path).unwrap();
-        assert_eq!(
-            test_store.insert("key".to_string(), Value::String("value".to_string())),
-            Ok(true)
-        );
+        assert_eq!(test_store.insert("key".to_string(), Value::String("value".to_string())), Ok(true));
     }
     {
         let mut test_store = KV::<String, Value>::new(test_cab_path).unwrap();
-        assert_eq!(
-            test_store.get("key".to_string()).unwrap(),
-            Some(Value::String("value".to_string()))
-        );
+        assert_eq!(test_store.get("key".to_string()).unwrap(),Some(Value::String("value".to_string())));
         assert_eq!(test_store.remove("key".to_string()), Ok(true));
     }
 
@@ -246,10 +222,7 @@ fn test_multithread_instance() {
 
     let t_1 = thread::spawn(|| {
         let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
-        assert_eq!(
-            test_store.insert("key".to_string(), Value::String("value".to_string())),
-            Ok(true)
-        );
+        assert_eq!(test_store.insert("key".to_string(), Value::String("value".to_string())), Ok(true));
     });
 
     let t_2 = thread::spawn(|| {
@@ -349,19 +322,13 @@ fn test_multithread_instance_read_between() {
 
     let t_1 = thread::spawn(|| {
         let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
-        assert_eq!(
-            test_store.insert("key".to_string(), Value::String("value".to_string())),
-            Ok(true)
-        );
+        assert_eq!(test_store.insert("key".to_string(), Value::String("value".to_string())), Ok(true));
     });
 
     let t_2 = thread::spawn(|| {
         let mut test_store = KV::<String, Value>::new(TEST_CAB_PATH).unwrap();
         std::thread::sleep(std::time::Duration::new(1u64, 0u32));
-        assert_eq!(
-            test_store.get("key".to_string()).unwrap().unwrap(),
-            Value::String("value".to_string())
-        );
+        assert_eq!(test_store.get("key".to_string()).unwrap().unwrap(), Value::String("value".to_string()));
         assert_eq!(test_store.remove("key".to_string()), Ok(true));
     });
 

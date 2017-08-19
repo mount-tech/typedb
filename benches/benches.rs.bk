@@ -3,7 +3,7 @@
 extern crate test;
 extern crate typedb;
 
-use typedb::{KV, Value};
+use typedb::{ KV, Value };
 
 #[cfg(test)]
 mod benches {
@@ -26,7 +26,9 @@ mod benches {
 
         let _ = test_store.insert("test".to_string(), Value::Int(1));
 
-        b.iter(|| { let _ = test_store.get("test".to_string()); });
+        b.iter(|| {
+            let _ = test_store.get("test".to_string());
+        });
 
         bench_teardown!(test_cab_path);
     }

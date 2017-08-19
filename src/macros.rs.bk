@@ -23,10 +23,16 @@ macro_rules! value {
 
 #[test]
 fn test_macro_key() {
-    key!(MyKey: String(String), Int(i32));
+    key!(MyKey:
+         String(String),
+         Int(i32)
+    );
 }
 
 #[test]
 fn test_macro_value() {
-    value!(MyValue: String(String), Int(i32));
+    value!(MyValue:
+       String(String),
+       Int(i32)
+    );
 }
