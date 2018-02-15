@@ -71,7 +71,7 @@ use std::io::SeekFrom;
 use std::hash::Hash;
 
 
-use bincode::{serialize, deserialize, Infinite};
+use bincode::{serialize, deserialize};
 use serde::ser::Serialize;
 use serde::de::Deserialize;
 
@@ -260,7 +260,7 @@ where
             }
 
             // serialize the cab as a u8 vec
-            let byte_vec: Vec<u8> = match serialize(&mut self.cab, Infinite) {
+            let byte_vec: Vec<u8> = match serialize(&mut self.cab) {
                 Ok(bv) => bv,
                 Err(e) => {
                     error!("serialize: {}", e);

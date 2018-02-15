@@ -10,7 +10,7 @@ documentation = "https://docs.rs/typedb"
 description = "Simple persistent generic HashMap/Key-value store"
 
 [dependencies]
-bincode = "0.9"
+bincode = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 log = "0.4"
