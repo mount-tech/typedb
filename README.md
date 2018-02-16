@@ -1,7 +1,7 @@
 typedb
 ========
 [![crates.io version](https://img.shields.io/crates/v/typedb.svg)](https://crates.io/crates/typedb)
-[![Build status](https://travis-ci.org/mount-research/typedb.svg?branch=master)](https://travis-ci.org/mount-research/typedb)
+[![Build status](https://travis-ci.org/mount-tech/typedb.svg?branch=master)](https://travis-ci.org/mount-tech/typedb)
 [![Documentation](https://docs.rs/typedb/badge.svg)](https://docs.rs/typedb)
 
 Simple persistent generic HashMap/Key-value store, using file locking to limit writing between threads.
