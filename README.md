@@ -52,3 +52,5 @@ fn main() {
     let _ = test_store.remove(MyKey::Int(1i32));
 }
 ```
+
+[License](https://github.com/mount-tech/typedb/blob/master/LICENSE.md)
