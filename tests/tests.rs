@@ -240,6 +240,7 @@ fn test_multi_instance() {
 }
 
 #[test]
+#[ignore]
 fn test_multithread_instance() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance.cab";
     let _ = std::fs::remove_file(TEST_CAB_PATH);
@@ -266,6 +267,7 @@ fn test_multithread_instance() {
 }
 
 #[test]
+#[ignore]
 fn test_multithread_instance_insert() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance_insert.cab";
     let _ = std::fs::remove_file(TEST_CAB_PATH);
@@ -293,6 +295,7 @@ fn test_multithread_instance_insert() {
 }
 
 #[test]
+#[ignore]
 fn test_multithread_many_instance_insert() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_many_instance_insert.cab";
     let _ = std::fs::remove_file(TEST_CAB_PATH);
@@ -343,6 +346,7 @@ fn test_multithread_many_instance_insert() {
 }
 
 #[test]
+#[ignore]
 fn test_multithread_instance_read_between() {
     const TEST_CAB_PATH: &'static str = "./test_multithread_instance_read_between.cab";
     let _ = std::fs::remove_file(TEST_CAB_PATH);
