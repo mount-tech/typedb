@@ -190,19 +190,21 @@ where
 
     /// Loads key-value store from file
     fn load_from_persist(&mut self) -> KVResult {
-        for rec in self.persy.scan_records("tdb")? {
-            let byte_vec = rec.content;
-            // deserialize u8 vec back into HashMap
-            match deserialize(byte_vec.as_slice()) {
-                Ok(f) => {
-                    // assign read HashMap back to self
-                    self.cab = f;
-                }
-                Err(e) => {
-                    error!("{}", e);
-                    continue;
-                }
-            };
+        if self.persy.exists_segment("tdb")? {
+            for rec in self.persy.scan_records("tdb")? {
+                let byte_vec = rec.content;
+                // deserialize u8 vec back into HashMap
+                match deserialize(byte_vec.as_slice()) {
+                    Ok(f) => {
+                        // assign read HashMap back to self
+                        self.cab = f;
+                    }
+                    Err(e) => {
+                        error!("{}", e);
+                        continue;
+                    }
+                };
+            }
         }
 
         Ok(true)
