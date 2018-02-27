@@ -169,7 +169,11 @@ where
     fn write_to_persist(&mut self) -> KVResult {
         // attempt to write to the cab
         let mut tx = self.persy.begin()?;
-        self.persy.create_segment(&mut tx, "tdb")?;
+        // if the segment doesn't exist create
+        // TODO poss move to db creation
+        if !self.persy.exists_segment("tdb")? {
+            self.persy.create_segment(&mut tx, "tdb")?;
+        }
 
         // serialize the cab as a u8 vec
         let byte_vec: Vec<u8> = match serialize(&mut self.cab) {
