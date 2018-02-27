@@ -116,6 +116,14 @@ where
         }
         let persy = Persy::open(p, Config::new())?;
 
+        // if the segment doesn't exist create
+        if !persy.exists_segment("tdb")? {
+            let mut tx = persy.begin()?;
+            persy.create_segment(&mut tx, "tdb")?;
+            let prepared = persy.prepare_commit(tx)?;
+            persy.commit(prepared)?;
+        }
+
         let mut store = KV {
             cab: HashMap::new(),
             persy: persy,
@@ -169,11 +177,6 @@ where
     fn write_to_persist(&mut self) -> KVResult {
         // attempt to write to the cab
         let mut tx = self.persy.begin()?;
-        // if the segment doesn't exist create
-        // TODO poss move to db creation
-        if !self.persy.exists_segment("tdb")? {
-            self.persy.create_segment(&mut tx, "tdb")?;
-        }
 
         // serialize the cab as a u8 vec
         let byte_vec: Vec<u8> = match serialize(&mut self.cab) {
