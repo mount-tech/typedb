@@ -54,12 +54,12 @@ fn main() {
 #![deny(missing_docs)]
 
 extern crate bincode;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
 #[macro_use]
 extern crate log;
 extern crate persy;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 
 /// Macros for simplifying custom key and value types definition
 pub mod macros;
@@ -67,11 +67,11 @@ pub mod macros;
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use bincode::{serialize, deserialize};
+use bincode::{deserialize, serialize};
 use serde::ser::Serialize;
 use serde::de::Deserialize;
 
-use persy::{Persy, Config, PRes, PersyError};
+use persy::{Config, PRes, Persy, PersyError};
 
 /// A default value type to use with KV
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]

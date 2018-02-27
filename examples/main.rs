@@ -1,6 +1,6 @@
 extern crate typedb;
 
-use typedb::{KV, Value};
+use typedb::{Value, KV};
 
 fn main() {
     let cab_path = "./db.cab";
@@ -10,17 +10,13 @@ fn main() {
     println!("{:?}", test_store.get("key".to_string()).unwrap());
     let _ = test_store.remove("key".to_string());
 
-    let _ = KV::<String, Value>::new(cab_path).unwrap().insert(
-        "key".to_string(),
-        Value::String(
-            "value"
-                .to_string(),
-        ),
-    );
+    let _ = KV::<String, Value>::new(cab_path)
+        .unwrap()
+        .insert("key".to_string(), Value::String("value".to_string()));
 
-    let _ = KV::<String, Value>::new(cab_path).unwrap().remove(
-        "key".to_string(),
-    );
+    let _ = KV::<String, Value>::new(cab_path)
+        .unwrap()
+        .remove("key".to_string());
 
     let _ = std::fs::remove_file(cab_path);
 }

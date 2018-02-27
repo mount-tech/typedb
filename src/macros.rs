@@ -20,7 +20,6 @@ macro_rules! value {
     };
 }
 
-
 #[test]
 fn test_macro_key() {
     key!(MyKey: String(String), Int(i32));

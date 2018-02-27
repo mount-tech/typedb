@@ -1,6 +1,6 @@
 extern crate typedb;
 
-use typedb::{KV, Value};
+use typedb::{Value, KV};
 
 macro_rules! test_setup {
     ( $p:ident, $i:ident ) => {
