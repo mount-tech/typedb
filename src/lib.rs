@@ -59,49 +59,19 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate log;
-extern crate fs2;
+extern crate persy;
 
 /// Macros for simplifying custom key and value types definition
 pub mod macros;
 
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
-use std::io::prelude::*;
-use std::io::SeekFrom;
 use std::hash::Hash;
-
 
 use bincode::{serialize, deserialize};
 use serde::ser::Serialize;
 use serde::de::Deserialize;
 
-
-use fs2::FileExt;
-
-/// The maximum number of retries the cab will make
-const MAX_RETRIES: i32 = 10;
-
-/// Definition of a macro for retrying an operation
-macro_rules! retry {
-    ($i:ident, $b:block) => (
-        for $i in 0..MAX_RETRIES {
-            if $i != 0 {
-                std::thread::park_timeout(std::time::Duration::new(0u64, 1000u32));
-            }
-
-            $b
-        }
-    )
-}
-
-/// Macro for what to do on last retry
-macro_rules! last_retry {
-    ($i:ident, $b:stmt) => (
-        if $i >= MAX_RETRIES - 1 {
-            $b;
-        }
-    )
-}
+use persy::{Persy, Config, PRes, PersyError};
 
 /// A default value type to use with KV
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
@@ -119,39 +89,15 @@ pub enum Value {
 }
 
 /// Type alias for results from KV
-type KVResult = Result<bool, KVError>;
+type KVResult = PRes<bool>;
 
-/// Errors that KV might have
-#[derive(Debug, PartialEq)]
-pub enum KVError {
-    /// Could not deserialize the cab from disk
-    CouldntDecode,
-    /// Couldn't serialize the hashmap for writing to disk
-    CouldntEncode,
-    /// Could not write to the cab on disk
-    CouldntWrite,
-    /// Failed to read the cab from disk
-    CouldntRead,
-    /// Could not flush the data to disk
-    CouldntFlush,
-    /// Could not open the file from disk
-    CouldntOpen,
-    /// Could not load the file from disk
-    CouldntLoad,
-    /// Failed to write lock the cab
-    CouldntWriteLock,
-    /// Failed to read lock the cab
-    CouldntReadLock,
-    /// Failed to unlock the cab
-    CouldntUnlock,
-    /// Failed to set SeekFrom::Start
-    CouldntSeekToStart,
-}
+/// Type alias for PersyError
+type KVError = PersyError;
 
 /// The type that represents the key-value store
 pub struct KV<K, V> {
     cab: HashMap<K, V>,
-    file: File,
+    persy: Persy,
 }
 
 impl<K, V> KV<K, V>
@@ -160,14 +106,17 @@ where
     V: Clone + Serialize + for<'vde> Deserialize<'vde>,
 {
     /// Creates a new instance of the KV store
-    pub fn new(p: &'static str) -> Result<KV<K, V>, KVError> {
+    pub fn new(p: &'static str) -> Result<KV<K, V>, PersyError> {
         // create the KV instance
+        Persy::create(p)?;
+        let persy = Persy::open(p, Config::new())?;
+
         let mut store = KV {
             cab: HashMap::new(),
-            file: KV::<K, V>::retry_get_file(p).unwrap(),
+            persy: persy,
         };
 
-        match store.load_from_persist(false) {
+        match store.load_from_persist() {
             Ok(f) => trace!("{}", f),
             Err(e) => {
                 return Err(e);
@@ -177,37 +126,10 @@ where
         Ok(store)
     }
 
-    /// Retry to get a reference to the cab file at path p and create if doesn't exist
-    fn retry_get_file(p: &'static str) -> Result<File, KVError> {
-        retry!(i, {
-            match OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .open(p) {
-                Ok(f) => {
-                    return Ok(f);
-                }
-                Err(e) => {
-                    error!("{}", e);
-                    last_retry!(i, return Err(KVError::CouldntOpen));
-                    continue;
-                }
-            };
-        });
-
-        Err(KVError::CouldntOpen)
-    }
-
     /// Inserta a key, value pair into the key-value store
     pub fn insert(&mut self, key: K, value: V) -> KVResult {
-        // check that can write to the cab
-        if let Err(e) = self.file.lock_exclusive() {
-            error!("{}", e);
-            return Err(KVError::CouldntWriteLock);
-        }
         // make sure mem version up to date
-        self.load_from_persist(true)?;
+        self.load_from_persist()?;
         // insert into the HashMap
         self.cab.insert(key, value);
         // persist
@@ -217,7 +139,7 @@ where
     /// Get the value from a key
     pub fn get(&mut self, key: K) -> Result<Option<V>, KVError> {
         // make sure mem version up to date
-        self.load_from_persist(false)?;
+        self.load_from_persist()?;
         // get the value from the cab
         match self.cab.get(&key) {
             Some(v) => Ok(Some((*v).clone())),
@@ -227,13 +149,8 @@ where
 
     /// Removes a key and associated value from the key-value Store
     pub fn remove(&mut self, key: K) -> KVResult {
-        // check that can write to the cab
-        if let Err(e) = self.file.lock_exclusive() {
-            error!("{}", e);
-            return Err(KVError::CouldntWriteLock);
-        }
         // make sure mem version up to date
-        self.load_from_persist(true)?;
+        self.load_from_persist()?;
         // remove from the HashMap
         self.cab.remove(&key);
         // persist
@@ -243,7 +160,7 @@ where
     /// get all the keys contained in the KV Store
     pub fn keys(&mut self) -> Result<Vec<K>, KVError> {
         // make sure mem version up to date
-        self.load_from_persist(false)?;
+        self.load_from_persist()?;
         // create a vec from the cabs keys
         Ok(self.cab.keys().map(|k| k.clone()).collect())
     }
@@ -251,118 +168,43 @@ where
     /// Writes the key-value Store to file
     fn write_to_persist(&mut self) -> KVResult {
         // attempt to write to the cab
-        retry!(i, {
-            // check that can write to the cab
-            if let Err(e) = self.file.lock_exclusive() {
-                error!("{}", e);
-                last_retry!(i, return Err(KVError::CouldntWriteLock));
-                continue;
+        let mut tx = self.persy.begin()?;
+        self.persy.create_segment(&mut tx, "tdb")?;
+
+        // serialize the cab as a u8 vec
+        let byte_vec: Vec<u8> = match serialize(&mut self.cab) {
+            Ok(bv) => bv,
+            Err(e) => {
+                error!("serialize: {}", e);
+                return Err(PersyError::Err("Couldn't encode".to_string()));
             }
+        };
 
-            // serialize the cab as a u8 vec
-            let byte_vec: Vec<u8> = match serialize(&mut self.cab) {
-                Ok(bv) => bv,
-                Err(e) => {
-                    error!("serialize: {}", e);
-                    return Err(KVError::CouldntEncode);
-                }
-            };
+        self.persy.insert_record(&mut tx, "tdb", &byte_vec)?;
 
-            // seek to the start
-            if let Err(e) = self.file.seek(SeekFrom::Start(0)) {
-                error!("{}", e);
-                last_retry!(i, return Err(KVError::CouldntSeekToStart));
-                continue;
-            }
+        let prepared = self.persy.prepare_commit(tx)?;
+        self.persy.commit(prepared)?;
 
-            // write the bytes to it
-            if let Err(e) = self.file.write_all(byte_vec.as_slice()) {
-                error!("file.write_all/retry: {}", e);
-                last_retry!(i, return Err(KVError::CouldntWrite));
-                continue;
-            }
-
-            // flush to disk
-            if let Err(e) = self.file.flush() {
-                error!("{}", e);
-                last_retry!(i, return Err(KVError::CouldntFlush));
-                continue;
-            }
-
-            // unlock the file after write has completed
-            if let Err(e) = self.file.unlock() {
-                error!("{}", e);
-                last_retry!(i, return Err(KVError::CouldntUnlock));
-                continue;
-            }
-            return Ok(true);
-        });
-
-        Err(KVError::CouldntWrite)
+        Ok(true)
     }
 
     /// Loads key-value store from file
-    fn load_from_persist(&mut self, already_locked: bool) -> KVResult {
-        retry!(i, {
-            // byte vec to read into
-            let mut byte_vec = Vec::new();
-
-            // wait/lock the cab and read the bytes
-            if !already_locked {
-                if let Err(e) = self.file.lock_shared() {
-                    error!("{}", e);
-                    return Err(KVError::CouldntReadLock);
-                }
-            }
-
-            // seek to the start
-            if let Err(e) = self.file.seek(SeekFrom::Start(0)) {
-                error!("{}", e);
-                last_retry!(i, return Err(KVError::CouldntSeekToStart));
-                continue;
-            }
-
-            // read the file into the buffer
-            match self.file.read_to_end(&mut byte_vec) {
-                Ok(count) => {
-                    // don't attempt to deserialize as empty
-                    if count == 0 {
-                        if !already_locked {
-                            if let Err(e) = self.file.unlock() {
-                                error!("{}", e);
-                                last_retry!(i, return Err(KVError::CouldntUnlock));
-                            }
-                        }
-                        return Ok(true);
-                    }
-                }
-                Err(e) => {
-                    error!("{}", e);
-                    return Err(KVError::CouldntRead);
-                }
-            }
-
+    fn load_from_persist(&mut self) -> KVResult {
+        for rec in self.persy.scan_records("tdb")? {
+            let byte_vec = rec.content;
             // deserialize u8 vec back into HashMap
             match deserialize(byte_vec.as_slice()) {
                 Ok(f) => {
                     // assign read HashMap back to self
                     self.cab = f;
-                    if !already_locked {
-                        if let Err(e) = self.file.unlock() {
-                            error!("{}", e);
-                            last_retry!(i, return Err(KVError::CouldntUnlock));
-                        }
-                    }
-                    return Ok(true);
                 }
                 Err(e) => {
                     error!("{}", e);
-                    last_retry!(i, return Err(KVError::CouldntDecode));
                     continue;
                 }
             };
-        });
+        }
 
-        Err(KVError::CouldntLoad)
+        Ok(true)
     }
 }
