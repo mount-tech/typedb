@@ -12,7 +12,7 @@ extern crate typedb;
 use typedb::{ KV, Value };
 
 fn main() {
-    let mut test_store = KV::<String, Value>::new("./db.cab").unwrap();
+    let mut test_store = KV::<String, Value>::new("./basic.cab").unwrap();
 
     let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
     println!("{:?}", test_store.get("key".to_string()));
@@ -41,7 +41,7 @@ value!(MyValue:
 );
 
 fn main() {
-    let mut test_store = KV::<MyKey, MyValue>::new("./db.cab").unwrap();
+    let mut test_store = KV::<MyKey, MyValue>::new("./types.cab").unwrap();
 
     let _ = test_store.insert(MyKey::Int(1i32), MyValue::String("value".to_string()));
     println!("{:?}", test_store.get(MyKey::Int(1i32)));
@@ -121,12 +121,7 @@ where
             persy: persy,
         };
 
-        match store.load_from_persist() {
-            Ok(f) => trace!("{}", f),
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        store.load_from_persist()?;
 
         Ok(store)
     }
@@ -210,7 +205,7 @@ where
                     }
                     Err(e) => {
                         error!("{}", e);
-                        continue;
+                        return Err(PersyError::Err("Couldn't decode cab".to_string()));
                     }
                 };
             }
