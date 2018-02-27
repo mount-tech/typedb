@@ -66,6 +66,7 @@ pub mod macros;
 
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::io::ErrorKind;
 
 use bincode::{deserialize, serialize};
 use serde::ser::Serialize;
@@ -108,7 +109,11 @@ where
     /// Creates a new instance of the KV store
     pub fn new(p: &'static str) -> Result<KV<K, V>, PersyError> {
         // create the KV instance
-        Persy::create(p)?;
+        match Persy::create(p) {
+            Ok(o) => o,
+            Err(PersyError::IO(ref e)) if e.kind() == ErrorKind::AlreadyExists => (),
+            Err(e) => return Err(e),
+        }
         let persy = Persy::open(p, Config::new())?;
 
         let mut store = KV {
