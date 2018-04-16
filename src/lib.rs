@@ -179,7 +179,7 @@ where
         let mut tx = self.persy.begin()?;
 
         // serialize the cab as a u8 vec
-        let byte_vec: Vec<u8> = match serialize(&mut self.cab) {
+        let byte_vec: Vec<u8> = match serialize(&self.cab) {
             Ok(bv) => bv,
             Err(e) => {
                 error!("serialize: {}", e);
