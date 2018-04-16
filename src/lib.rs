@@ -15,8 +15,8 @@ fn main() {
     let mut test_store = KV::<String, Value>::new("./basic.cab").unwrap();
 
     let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
-    println!("{:?}", test_store.get("key".to_string()));
-    let _ = test_store.remove("key".to_string());
+    println!("{:?}", test_store.get(&"key".to_string()));
+    let _ = test_store.remove(&"key".to_string());
 }
 ```
 
@@ -44,8 +44,8 @@ fn main() {
     let mut test_store = KV::<MyKey, MyValue>::new("./types.cab").unwrap();
 
     let _ = test_store.insert(MyKey::Int(1i32), MyValue::String("value".to_string()));
-    println!("{:?}", test_store.get(MyKey::Int(1i32)));
-    let _ = test_store.remove(MyKey::Int(1i32));
+    println!("{:?}", test_store.get(&MyKey::Int(1i32)));
+    let _ = test_store.remove(&MyKey::Int(1i32));
 }
 ```
 
@@ -145,7 +145,7 @@ where
     }
 
     /// Get the value from a key
-    pub fn get(&mut self, key: K) -> Result<Option<V>, KVError> {
+    pub fn get(&mut self, key: &K) -> Result<Option<V>, KVError> {
         // make sure mem version up to date
         self.load_from_persist()?;
         // get the value from the cab
@@ -156,7 +156,7 @@ where
     }
 
     /// Removes a key and associated value from the key-value Store
-    pub fn remove(&mut self, key: K) -> KVResult {
+    pub fn remove(&mut self, key: &K) -> KVResult {
         // make sure mem version up to date
         self.load_from_persist()?;
         // remove from the HashMap
