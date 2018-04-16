@@ -170,7 +170,7 @@ where
         // make sure mem version up to date
         self.load_from_persist()?;
         // create a vec from the cabs keys
-        Ok(self.cab.keys().map(|k| k.clone()).collect())
+        Ok(self.cab.keys().cloned().collect())
     }
 
     /// Writes the key-value Store to file
