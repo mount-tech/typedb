@@ -126,7 +126,7 @@ where
 
         let mut store = KV {
             cab: HashMap::new(),
-            persy: persy,
+            persy,
         };
 
         store.load_from_persist()?;
