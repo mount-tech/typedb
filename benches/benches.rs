@@ -11,12 +11,12 @@ mod benches {
     use test::Bencher;
 
     macro_rules! bench_teardown {
-        ( $p:ident ) => {
+        ($p:ident) => {
             use std::{thread, time};
 
             thread::sleep(time::Duration::from_secs(2));
             let _ = std::fs::remove_file($p);
-        }
+        };
     }
 
     #[bench]

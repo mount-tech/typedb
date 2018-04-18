@@ -3,19 +3,19 @@ extern crate typedb;
 use typedb::{Value, KV};
 
 macro_rules! test_setup {
-    ( $p:ident, $i:ident ) => {
+    ($p:ident, $i:ident) => {
         let _ = std::fs::remove_file($p);
         let mut $i = KV::<String, Value>::new($p).unwrap();
-    }
+    };
 }
 
 macro_rules! test_teardown {
-    ( $p:ident ) => {
+    ($p:ident) => {
         use std::{thread, time};
 
         thread::sleep(time::Duration::from_secs(1));
         let _ = std::fs::remove_file($p);
-    }
+    };
 }
 
 #[test]

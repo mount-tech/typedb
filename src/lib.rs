@@ -69,8 +69,8 @@ use std::hash::Hash;
 use std::io::ErrorKind;
 
 use bincode::{deserialize, serialize};
-use serde::ser::Serialize;
 use serde::de::Deserialize;
+use serde::ser::Serialize;
 
 use persy::{Config, PRes, Persy, PersyError};
 
