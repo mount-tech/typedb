@@ -5,9 +5,17 @@ extern crate typedb;
 
 use typedb::KV;
 
-key!(MyKey: String(String), Int(i32),);
+key!(
+enum MyKey {
+    String(String),
+    Int(i32),
+});
 
-value!(MyValue: String(String), Int(i32),);
+value!(
+enum MyValue {
+    String(String),
+    Int(i32),
+});
 
 fn main() {
     let cab_path = "./db.cab";

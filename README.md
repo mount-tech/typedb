@@ -34,15 +34,17 @@ extern crate serde_derive;
 
 use typedb::KV;
 
-key!(MyKey:
+key!(
+enum MyKey {
     String(String),
     Int(i32),
-);
+});
 
-value!(MyValue:
+value!(
+enum MyValue {
     String(String),
     Int(i32),
-);
+});
 
 fn main() {
     let mut test_store = KV::<MyKey, MyValue>::new("./db.cab").unwrap();
