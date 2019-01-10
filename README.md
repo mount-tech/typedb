@@ -12,8 +12,6 @@ This is in a beta state at the moment.
 
 Basic usage:
 ```rust
-extern crate typedb;
-
 use typedb::{ KV, Value };
 
 fn main() {
@@ -27,12 +25,8 @@ fn main() {
 
 Usage with user defined Key and Value types:
 ```rust
-#[macro_use]
-extern crate typedb;
-#[macro_use]
-extern crate serde_derive;
-
-use typedb::KV;
+use typedb::{KV, key, value};
+use serde_derive::{ Serialize, Deserialize };
 
 key!(
 enum MyKey {

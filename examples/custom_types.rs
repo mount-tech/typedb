@@ -1,21 +1,19 @@
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate typedb;
-
-use typedb::KV;
+use typedb::{KV, key, value};
+use serde_derive::{ Serialize, Deserialize };
 
 key!(
-enum MyKey {
-    String(String),
-    Int(i32),
-});
+    enum MyKey {
+        String(String),
+        Int(i32),
+    }
+);
 
 value!(
-enum MyValue {
-    String(String),
-    Int(i32),
-});
+    enum MyValue {
+        String(String),
+        Int(i32),
+    }
+);
 
 fn main() {
     let cab_path = "./db.cab";

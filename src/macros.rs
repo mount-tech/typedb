@@ -19,17 +19,19 @@ macro_rules! value {
 #[test]
 fn test_macro_key() {
     key!(
-    enum MyKey {
-        String(String),
-        Int(i32)
-    });
+        enum MyKey {
+            String(String),
+            Int(i32),
+        }
+    );
 }
 
 #[test]
 fn test_macro_value() {
     value!(
-    enum MyValue {
-        String(String),
-        Int(i32)
-    });
+        enum MyValue {
+            String(String),
+            Int(i32),
+        }
+    );
 }

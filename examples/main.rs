@@ -1,5 +1,3 @@
-extern crate typedb;
-
 use typedb::{Value, KV};
 
 fn main() {

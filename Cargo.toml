@@ -8,6 +8,7 @@ repository = "https://github.com/mount-research/typedb"
 homepage = "https://github.com/mount-research/typedb"
 documentation = "https://docs.rs/typedb"
 description = "Simple persistent generic HashMap/Key-value store"
+edition = "2018"
 
 [dependencies]
 bincode = "1.0"
