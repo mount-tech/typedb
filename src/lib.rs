@@ -62,7 +62,6 @@ pub mod macros;
 
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::io::ErrorKind;
 
 use bincode::{deserialize, serialize};
 use serde::de::Deserialize;
@@ -107,7 +106,7 @@ where
         // create the KV instance
         match Persy::create(p) {
             Ok(o) => o,
-            Err(PersyError::IO(ref e)) if e.kind() == ErrorKind::AlreadyExists => (),
+            Err(PersyError::IO(ref e)) if e == "File exists (os error 17)" => (),
             Err(e) => return Err(e),
         }
         let persy = Persy::open(p, Config::new())?;
