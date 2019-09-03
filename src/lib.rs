@@ -90,10 +90,13 @@ type KVResult = PRes<bool>;
 /// Type alias for PersyError
 type KVError = PersyError;
 
+const SEGMENT_NAME: &str = "tdb";
+
 /// The type that represents the key-value store
 pub struct KV<K, V> {
     cab: HashMap<K, V>,
     persy: Persy,
+    id: Option<persy::PersyId>,
 }
 
 impl<K, V> KV<K, V>
@@ -112,9 +115,9 @@ where
         let persy = Persy::open(p, Config::new())?;
 
         // if the segment doesn't exist create
-        if !persy.exists_segment("tdb")? {
+        if !persy.exists_segment(SEGMENT_NAME)? {
             let mut tx = persy.begin()?;
-            persy.create_segment(&mut tx, "tdb")?;
+            persy.create_segment(&mut tx, SEGMENT_NAME)?;
             let prepared = persy.prepare_commit(tx)?;
             persy.commit(prepared)?;
         }
@@ -122,6 +125,7 @@ where
         let mut store = KV {
             cab: HashMap::new(),
             persy,
+            id: None,
         };
 
         store.load_from_persist()?;
@@ -144,10 +148,7 @@ where
         // make sure mem version up to date
         self.load_from_persist()?;
         // get the value from the cab
-        match self.cab.get(&key) {
-            Some(v) => Ok(Some((*v).clone())),
-            None => Ok(None),
-        }
+        Ok(self.cab.get(&key).map(|v| (*v).clone()))
     }
 
     /// Removes a key and associated value from the key-value Store
@@ -182,7 +183,10 @@ where
             }
         };
 
-        self.persy.insert_record(&mut tx, "tdb", &byte_vec)?;
+        match &self.id {
+            Some(ref x) => self.persy.update_record(&mut tx, SEGMENT_NAME, x, &byte_vec)?,
+            None => self.id = Some(self.persy.insert_record(&mut tx, SEGMENT_NAME, &byte_vec)?),
+        }
 
         let prepared = self.persy.prepare_commit(tx)?;
         self.persy.commit(prepared)?;
@@ -192,19 +196,29 @@ where
 
     /// Loads key-value store from file
     fn load_from_persist(&mut self) -> KVResult {
-        if self.persy.exists_segment("tdb")? {
-            for (_, byte_vec) in self.persy.scan("tdb")? {
+        if self.persy.exists_segment(SEGMENT_NAME)? {
+            let deserbv = |byte_vec: &Vec<u8>| {
                 // deserialize u8 vec back into HashMap
                 match deserialize(byte_vec.as_slice()) {
                     Ok(f) => {
                         // assign read HashMap back to self
-                        self.cab = f;
+                        Ok(f)
                     }
                     Err(e) => {
                         error!("{}", e);
-                        return Err(PersyError::Err("Couldn't decode cab".to_string()));
+                        Err(PersyError::Err("Couldn't decode cab".to_string()))
                     }
-                };
+                }
+            };
+            if let Some(ref x) = &self.id {
+                if let Some(byte_vec) = self.persy.read_record(SEGMENT_NAME, x)? {
+                    self.cab = deserbv(&byte_vec)?;
+                    return Ok(true);
+                }
+            }
+            for (id, byte_vec) in self.persy.scan(SEGMENT_NAME)? {
+                self.cab = deserbv(&byte_vec)?;
+                self.id = Some(id);
             }
         }
 
