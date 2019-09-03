@@ -7,14 +7,16 @@ This is in a beta state at the moment.
 Basic usage:
 
 ```
-use typedb::{ KV, Value };
+use typedb::{KV, Value};
 
 fn main() {
     let mut test_store = KV::<String, Value>::new("./basic.cab").unwrap();
 
-    let _ = test_store.insert("key".to_string(), Value::String("value".to_string()));
-    println!("{:?}", test_store.get(&"key".to_string()));
-    let _ = test_store.remove(&"key".to_string());
+    let _ = test_store.insert("key", &Value::String("value".to_string()));
+    println!("{:?}", test_store.get("key"));
+    let _ = test_store.remove("key");
+
+#   let _ = std::fs::remove_file("./basic.cab");
 }
 ```
 
@@ -39,9 +41,25 @@ enum MyValue {
 fn main() {
     let mut test_store = KV::<MyKey, MyValue>::new("./types.cab").unwrap();
 
-    let _ = test_store.insert(MyKey::Int(1i32), MyValue::String("value".to_string()));
+    let _ = test_store.insert(&MyKey::Int(1i32), &MyValue::String("value".to_string()));
     println!("{:?}", test_store.get(&MyKey::Int(1i32)));
     let _ = test_store.remove(&MyKey::Int(1i32));
+
+#   let _ = std::fs::remove_file("./types.cab");
+}
+```
+
+Raw usage:
+
+```
+fn main() {
+    let mut test_store = typedb::RawKV::<String, String>::new("./raw.cab", "runint").unwrap();
+
+    let _ = test_store.insert("key".to_string(), "value".to_string());
+    println!("{:?}", test_store.get(&"key".to_string()));
+    let _ = test_store.remove("key".to_string());
+
+#   let _ = std::fs::remove_file("./raw.cab");
 }
 ```
 
@@ -50,8 +68,6 @@ fn main() {
 #![deny(missing_docs)]
 
 extern crate bincode;
-#[macro_use]
-extern crate log;
 extern crate persy;
 extern crate serde;
 #[macro_use]
@@ -60,43 +76,124 @@ extern crate serde_derive;
 /// Macros for simplifying custom key and value types definition
 pub mod macros;
 
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::{borrow::Borrow, borrow::Cow, collections::HashMap, hash::Hash, io, marker::PhantomData};
 
 use bincode::{deserialize, serialize};
-use serde::de::Deserialize;
-use serde::ser::Serialize;
-
-use persy::{Config, Persy, PersyError};
+use persy::{ByteVec, Config, IndexType, PRes, Persy, PersyError};
+use serde::{de::Deserialize, ser::Serialize};
 
 /// A default value type to use with KV
+#[allow(missing_docs)]
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub enum Value {
-    /// Cab default Value type for strings
     String(String),
-    /// Cab default Value type for intergers
     Int(i32),
-    /// Cab default Value type for floats
     Float(f32),
-    /// Cab default Value type for a sub map
     Map(HashMap<String, Value>),
-    /// Cab default Value type for list
     List(Vec<Value>),
 }
 
-/// Type alias for results from KV
-type KVResult = Result<bool, PersyError>;
+/// The type that represents a raw key-value store
+#[derive(Clone)]
+pub struct RawKV<K, V>(Persy, Cow<'static, str>, PhantomData<(K, V)>);
 
-/// Type alias for PersyError
-type KVError = PersyError;
+impl<K, V> RawKV<K, V>
+where
+    K: IndexType,
+    V: IndexType,
+{
+    /// Creates a new instance of the raw KV store
+    pub fn new(p: &str, idxn: impl Into<Cow<'static, str>>) -> PRes<RawKV<K, V>> {
+        Self::new_intern(p, idxn.into())
+    }
 
-const SEGMENT_NAME: &str = "tdb";
+    fn new_intern(p: &str, idxn: Cow<'static, str>) -> PRes<RawKV<K, V>> {
+        // create the KV instance
+        match Persy::create(p) {
+            Ok(_) => {}
+            Err(PersyError::Io(ref e)) if e.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+
+        let persy = Persy::open(p, Config::new())?;
+        let ridxn = idxn.as_ref();
+
+        if !persy.exists_index(ridxn)? {
+            let mut tx = persy.begin()?;
+            persy.create_index::<K, V>(&mut tx, ridxn, persy::ValueMode::REPLACE)?;
+            let prepared = persy.prepare_commit(tx)?;
+            persy.commit(prepared)?;
+        }
+
+        Ok(RawKV(persy, idxn, PhantomData))
+    }
+
+    /// Inserta a key, value pair into the key-value store
+    pub fn insert(&self, key: K, value: V) -> PRes<()> {
+        let mut tx = self.0.begin()?;
+        self.0.put::<K, V>(&mut tx, self.1.as_ref(), key, value)?;
+        let prepared = self.0.prepare_commit(tx)?;
+        self.0.commit(prepared)
+    }
+
+    /// Get the value from a key
+    pub fn get(&self, key: &K) -> PRes<Option<V>> {
+        Ok(self
+            .0
+            .get::<K, V>(self.1.as_ref(), key)?
+            .and_then(Self::flatten_value))
+    }
+
+    /// Removes a key and associated value from the key-value store
+    pub fn remove(&self, key: K) -> PRes<()> {
+        let mut tx = self.0.begin()?;
+        self.0.remove::<K, V>(&mut tx, self.1.as_ref(), key, None)?;
+        let prepared = self.0.prepare_commit(tx)?;
+        self.0.commit(prepared)
+    }
+
+    /// Returns an iterator visiting all key-value pairs in arbitrary order
+    pub fn iter(&self) -> PRes<impl Iterator<Item = (K, V)>> {
+        Ok(self
+            .0
+            .range::<K, V, _>(self.1.as_ref(), ..)?
+            .filter_map(|(k, v)| Self::flatten_value(v).map(|v2| (k, v2))))
+    }
+
+    /// get all the keys contained in the KV Store
+    pub fn keys(&self) -> PRes<impl Iterator<Item = K>> {
+        Ok(self.iter()?.map(|(k, _)| k))
+    }
+
+    fn flatten_value(v: persy::Value<V>) -> Option<V> {
+        use persy::Value;
+        match v {
+            Value::CLUSTER(x) => x.into_iter().next(),
+            Value::SINGLE(x) => Some(x),
+        }
+    }
+}
 
 /// The type that represents the key-value store
-pub struct KV<K, V> {
-    cab: HashMap<K, V>,
-    persy: Persy,
-    id: Option<persy::PersyId>,
+#[derive(Clone)]
+pub struct KV<K, V>(RawKV<ByteVec, ByteVec>, PhantomData<(K, V)>);
+
+/// This function casts bincode errors into equivalent persy errors
+fn map_encoderr(e: bincode::Error) -> PersyError {
+    use bincode::ErrorKind;
+    match *e {
+        ErrorKind::Io(x) => x.into(),
+        ErrorKind::InvalidUtf8Encoding(x) => x.into(),
+        x => PersyError::Custom(Box::new(x)),
+    }
+}
+
+fn encode_kv<T: Serialize>(x: &T) -> PRes<ByteVec> {
+    Ok(ByteVec(serialize(x).map_err(map_encoderr)?))
+}
+
+fn decode_kv<'a, T: Deserialize<'a>>(x: &'a ByteVec) -> PRes<T> {
+    Ok(deserialize(x.0.as_slice()).map_err(map_encoderr)?)
 }
 
 impl<K, V> KV<K, V>
@@ -105,115 +202,79 @@ where
     V: Clone + Serialize + for<'vde> Deserialize<'vde>,
 {
     /// Creates a new instance of the KV store
-    pub fn new(p: &'static str) -> Result<KV<K, V>, PersyError> {
-        // create and open the persy instance
+    pub fn new(p: &str) -> PRes<KV<K, V>> {
+        // create the KV instance
         match Persy::create(p) {
             Ok(o) => o,
-            Err(PersyError::Io(ref e)) if e.to_string() == "File exists (os error 17)" => (),
+            Err(PersyError::Io(ref e)) if e.kind() == io::ErrorKind::AlreadyExists => (),
             Err(e) => return Err(e),
         }
+
         let persy = Persy::open(p, Config::new())?;
 
-        // if the segment doesn't exist create
-        if !persy.exists_segment(SEGMENT_NAME)? {
+        // see issue #6: "On LOAD, check if file format is old or new, deserialize accordingly."
+        if !persy.exists_index("tdbi")? {
+            let mut cab = HashMap::<K, V>::new();
             let mut tx = persy.begin()?;
-            persy.create_segment(&mut tx, SEGMENT_NAME)?;
+
+            if persy.exists_segment("tdb")? {
+                // import data from previous storage format
+                for (_, byte_vec) in persy.scan("tdb")? {
+                    // deserialize u8 vec back into HashMap
+                    cab = deserialize(byte_vec.as_slice()).map_err(map_encoderr)?;
+                }
+                persy.drop_segment(&mut tx, "tdb")?;
+            }
+
+            persy.create_index::<ByteVec, ByteVec>(&mut tx, "tdbi", persy::ValueMode::REPLACE)?;
+            for (key, value) in &cab {
+                persy.put::<ByteVec, ByteVec>(
+                    &mut tx,
+                    "tdbi",
+                    encode_kv(&key)?,
+                    encode_kv(&value)?,
+                )?;
+            }
+
             let prepared = persy.prepare_commit(tx)?;
             persy.commit(prepared)?;
         }
 
-        let mut store = KV {
-            cab: HashMap::new(),
-            persy,
-            id: None,
-        };
-
-        store.load_from_persist()?;
-
-        Ok(store)
+        Ok(KV(RawKV(persy, "tdbi".into(), PhantomData), PhantomData))
     }
 
     /// Inserta a key, value pair into the key-value store
-    pub fn insert(&mut self, key: K, value: V) -> KVResult {
-        // insert into the HashMap
-        self.cab.insert(key, value);
-        // persist
-        self.write_to_persist()
+    pub fn insert<Q>(&self, key: &Q, value: &V) -> PRes<()>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + Serialize + ?Sized,
+    {
+        self.0.insert(encode_kv(&key)?, encode_kv(&value)?)
     }
 
     /// Get the value from a key
-    pub fn get(&mut self, key: &K) -> Result<Option<V>, KVError> {
-        // get the value from the cab
-        Ok(self.cab.get(&key).map(|v| (*v).clone()))
+    pub fn get<Q>(&self, key: &Q) -> PRes<Option<V>>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + Serialize + ?Sized,
+    {
+        self.0
+            .get(&encode_kv(&key)?)?
+            .map(|v| decode_kv::<V>(&v))
+            .map_or(Ok(None), |r| r.map(Some))
     }
 
     /// Removes a key and associated value from the key-value Store
-    pub fn remove(&mut self, key: &K) -> KVResult {
-        // remove from the HashMap
-        self.cab.remove(&key);
-        // persist
-        self.write_to_persist()
+    pub fn remove<Q>(&self, key: &Q) -> PRes<()>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + Serialize + ?Sized,
+    {
+        self.0.remove(encode_kv(&key)?)
     }
 
     /// get all the keys contained in the KV Store
-    pub fn keys(&mut self) -> Result<Vec<K>, KVError> {
-        // create a vec from the cabs keys
-        Ok(self.cab.keys().cloned().collect())
-    }
-
-    /// Writes the key-value Store to file
-    fn write_to_persist(&mut self) -> KVResult {
-        // attempt to write to the cab
-        let mut tx = self.persy.begin()?;
-
-        // serialize the cab as a u8 vec
-        let byte_vec: Vec<u8> = match serialize(&self.cab) {
-            Ok(bv) => bv,
-            Err(e) => {
-                error!("serialize: {}", e);
-                return Err(PersyError::Custom(e));
-            }
-        };
-
-        match &self.id {
-            Some(ref x) => self
-                .persy
-                .update_record(&mut tx, SEGMENT_NAME, x, &byte_vec)?,
-            None => self.id = Some(self.persy.insert_record(&mut tx, SEGMENT_NAME, &byte_vec)?),
-        }
-
-        let prepared = self.persy.prepare_commit(tx)?;
-        self.persy.commit(prepared)?;
-
-        Ok(true)
-    }
-
-    /// deserialize u8 vec back into HashMap
-    fn deserialize_byte_vec(byte_vec: &Vec<u8>) -> Result<HashMap<K, V>, PersyError> {
-        match deserialize(byte_vec.as_slice()) {
-            Ok(f) => Ok(f),
-            Err(e) => {
-                error!("{}", e);
-                Err(PersyError::Custom(e))
-            }
-        }
-    }
-
-    /// Loads key-value store from file
-    fn load_from_persist(&mut self) -> KVResult {
-        if self.persy.exists_segment(SEGMENT_NAME)? {
-            if let Some(ref x) = &self.id {
-                if let Some(byte_vec) = self.persy.read_record(SEGMENT_NAME, x)? {
-                    self.cab = KV::deserialize_byte_vec(&byte_vec)?;
-                    return Ok(true);
-                }
-            }
-            for (id, byte_vec) in self.persy.scan(SEGMENT_NAME)? {
-                self.cab = KV::deserialize_byte_vec(&byte_vec)?;
-                self.id = Some(id);
-            }
-        }
-
-        Ok(true)
+    pub fn keys(&self) -> PRes<Vec<K>> {
+        self.0.keys()?.map(|k| decode_kv::<K>(&k)).collect()
     }
 }

@@ -3,4 +3,8 @@ test_cabs
 *.swp
 **/.DS_Store
 *.cab
-Cargo.lock
+*.persy
+*.strace.*
+/.gdb_history
+/Cargo.lock
+/tmp
