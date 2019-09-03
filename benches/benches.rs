@@ -26,8 +26,9 @@ mod benches {
 
         let _ = test_store.insert("test".to_string(), Value::Int(1));
 
+        let test_as_string = "test".to_string();
         b.iter(|| {
-            let _ = test_store.get("test".to_string());
+            let _ = test_store.get(&test_as_string);
         });
 
         bench_teardown!(test_cab_path);
