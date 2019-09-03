@@ -135,8 +135,6 @@ where
 
     /// Inserta a key, value pair into the key-value store
     pub fn insert(&mut self, key: K, value: V) -> KVResult {
-        // make sure mem version up to date
-        self.load_from_persist()?;
         // insert into the HashMap
         self.cab.insert(key, value);
         // persist
@@ -145,16 +143,12 @@ where
 
     /// Get the value from a key
     pub fn get(&mut self, key: &K) -> Result<Option<V>, KVError> {
-        // make sure mem version up to date
-        self.load_from_persist()?;
         // get the value from the cab
         Ok(self.cab.get(&key).map(|v| (*v).clone()))
     }
 
     /// Removes a key and associated value from the key-value Store
     pub fn remove(&mut self, key: &K) -> KVResult {
-        // make sure mem version up to date
-        self.load_from_persist()?;
         // remove from the HashMap
         self.cab.remove(&key);
         // persist
@@ -163,8 +157,6 @@ where
 
     /// get all the keys contained in the KV Store
     pub fn keys(&mut self) -> Result<Vec<K>, KVError> {
-        // make sure mem version up to date
-        self.load_from_persist()?;
         // create a vec from the cabs keys
         Ok(self.cab.keys().cloned().collect())
     }
