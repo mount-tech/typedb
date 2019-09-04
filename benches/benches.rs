@@ -26,8 +26,9 @@ mod benches {
 
         let _ = test_store.insert("test".to_string(), Value::Int(1));
 
+        let test_as_string = "test".to_string();
         b.iter(|| {
-            let _ = test_store.get("test".to_string());
+            let _ = test_store.get(&test_as_string);
         });
 
         bench_teardown!(test_cab_path);
@@ -40,6 +41,20 @@ mod benches {
 
         b.iter(|| {
             let _ = test_store.insert("test".to_string(), Value::Int(1));
+        });
+
+        bench_teardown!(test_cab_path);
+    }
+
+    #[bench]
+    fn bench_insert_get_int(b: &mut Bencher) {
+        let test_cab_path = "./bench_insert_get_many.cab";
+        let mut test_store = KV::<String, Value>::new(test_cab_path).unwrap();
+        let test_as_string = "test".to_string();
+
+        b.iter(|| {
+            let _ = test_store.insert(test_as_string.clone(), Value::Int(1));
+            let _ = test_store.get(&test_as_string);
         });
 
         bench_teardown!(test_cab_path);
