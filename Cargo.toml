@@ -1,6 +1,6 @@
 [package]
 name = "typedb"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["shockham <samuel.hockham@gmail.com>"]
 license = "MIT"
 readme = "README.md"
