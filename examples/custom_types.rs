@@ -1,5 +1,5 @@
-use typedb::{KV, key, value};
-use serde_derive::{ Serialize, Deserialize };
+use serde_derive::{Deserialize, Serialize};
+use typedb::{key, value, KV};
 
 key!(
     enum MyKey {

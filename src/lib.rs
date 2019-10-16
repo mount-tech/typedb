@@ -67,7 +67,7 @@ use bincode::{deserialize, serialize};
 use serde::de::Deserialize;
 use serde::ser::Serialize;
 
-use persy::{Config, PRes, Persy, PersyError};
+use persy::{Config, Persy, PersyError};
 
 /// A default value type to use with KV
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
@@ -85,7 +85,7 @@ pub enum Value {
 }
 
 /// Type alias for results from KV
-type KVResult = PRes<bool>;
+type KVResult = Result<bool, PersyError>;
 
 /// Type alias for PersyError
 type KVError = PersyError;
@@ -106,10 +106,10 @@ where
 {
     /// Creates a new instance of the KV store
     pub fn new(p: &'static str) -> Result<KV<K, V>, PersyError> {
-        // create the KV instance
+        // create and open the persy instance
         match Persy::create(p) {
             Ok(o) => o,
-            Err(PersyError::IO(ref e)) if e == "File exists (os error 17)" => (),
+            Err(PersyError::Io(ref e)) if e.to_string() == "File exists (os error 17)" => (),
             Err(e) => return Err(e),
         }
         let persy = Persy::open(p, Config::new())?;
@@ -171,12 +171,14 @@ where
             Ok(bv) => bv,
             Err(e) => {
                 error!("serialize: {}", e);
-                return Err(PersyError::Err("Couldn't encode".to_string()));
+                return Err(PersyError::Custom(e));
             }
         };
 
         match &self.id {
-            Some(ref x) => self.persy.update_record(&mut tx, SEGMENT_NAME, x, &byte_vec)?,
+            Some(ref x) => self
+                .persy
+                .update_record(&mut tx, SEGMENT_NAME, x, &byte_vec)?,
             None => self.id = Some(self.persy.insert_record(&mut tx, SEGMENT_NAME, &byte_vec)?),
         }
 
@@ -198,7 +200,7 @@ where
                     }
                     Err(e) => {
                         error!("{}", e);
-                        Err(PersyError::Err("Couldn't decode cab".to_string()))
+                        Err(PersyError::Custom(e))
                     }
                 }
             };
