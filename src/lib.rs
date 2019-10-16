@@ -188,30 +188,30 @@ where
         Ok(true)
     }
 
+    /// deserialize u8 vec back into HashMap
+    fn deserialize_byte_vec(byte_vec: &Vec<u8>) -> Result<HashMap<K, V>, PersyError> {
+        match deserialize(byte_vec.as_slice()) {
+            Ok(f) => {
+                Ok(f)
+            }
+            Err(e) => {
+                error!("{}", e);
+                Err(PersyError::Custom(e))
+            }
+        }
+    }
+
     /// Loads key-value store from file
     fn load_from_persist(&mut self) -> KVResult {
         if self.persy.exists_segment(SEGMENT_NAME)? {
-            let deserbv = |byte_vec: &Vec<u8>| {
-                // deserialize u8 vec back into HashMap
-                match deserialize(byte_vec.as_slice()) {
-                    Ok(f) => {
-                        // assign read HashMap back to self
-                        Ok(f)
-                    }
-                    Err(e) => {
-                        error!("{}", e);
-                        Err(PersyError::Custom(e))
-                    }
-                }
-            };
             if let Some(ref x) = &self.id {
                 if let Some(byte_vec) = self.persy.read_record(SEGMENT_NAME, x)? {
-                    self.cab = deserbv(&byte_vec)?;
+                    self.cab = KV::deserialize_byte_vec(&byte_vec)?;
                     return Ok(true);
                 }
             }
             for (id, byte_vec) in self.persy.scan(SEGMENT_NAME)? {
-                self.cab = deserbv(&byte_vec)?;
+                self.cab = KV::deserialize_byte_vec(&byte_vec)?;
                 self.id = Some(id);
             }
         }
