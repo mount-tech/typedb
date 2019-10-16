@@ -191,9 +191,7 @@ where
     /// deserialize u8 vec back into HashMap
     fn deserialize_byte_vec(byte_vec: &Vec<u8>) -> Result<HashMap<K, V>, PersyError> {
         match deserialize(byte_vec.as_slice()) {
-            Ok(f) => {
-                Ok(f)
-            }
+            Ok(f) => Ok(f),
             Err(e) => {
                 error!("{}", e);
                 Err(PersyError::Custom(e))
