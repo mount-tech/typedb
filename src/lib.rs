@@ -105,7 +105,7 @@ where
     V: Clone + Serialize + for<'vde> Deserialize<'vde>,
 {
     /// Creates a new instance of the KV store
-    pub fn new(p: &'static str) -> Result<KV<K, V>, PersyError> {
+    pub fn new(p: &str) -> Result<KV<K, V>, PersyError> {
         // create and open the persy instance
         match Persy::create(p) {
             Ok(o) => o,
